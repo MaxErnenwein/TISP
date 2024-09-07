@@ -2,6 +2,8 @@
 #include <driver/i2c_master.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_sleep.h"
+#include "driver/gpio.h"
 
 #define TEST_I2C_PORT 0
 #define I2C_MASTER_SCL_IO 3
@@ -11,12 +13,31 @@
 #define MCP9808_SENSOR_ADDR_2               0x1C
 #define MCP9808_MEASURE_TEMPERATURE         0x05
 
-#define SI7021_SENSOR_ADDR                  0x40
-#define SI7021_MEADURE_HUMIDITY             0xF5
-
 i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
-i2c_master_dev_handle_t SI7021_dev_handle;
+
+/*void WiFi_Bluetooth_deinit(void)
+{
+    nimble_port_stop();
+    nimble_port_deinit();
+    esp_bluedroid_disable();
+    esp_bluedroid_deinit();
+    esp_bt_controller_disable();
+    esp_bt_controller_deinit();
+    esp_wifi_stop();
+}*/
+
+void GPIO_init(void)
+{
+    // Configure GPIO pins 0 and 1 as inputs to wake up from deep sleep
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1 << GPIO_NUM_0) | (1 << GPIO_NUM_1),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&io_conf);
+}
 
 void i2c_init(void)
 {
@@ -48,17 +69,9 @@ void i2c_init(void)
         .scl_speed_hz = 100000,
     };
 
-    // SI7021 device configuration
-    i2c_device_config_t SI7021_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = SI7021_SENSOR_ADDR,
-        .scl_speed_hz = 100000,
-    };
-
     // Add devices to I2C bus
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg, &MCP9808_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &SI7021_cfg, &SI7021_dev_handle));
 }
 
 float read_MCP9808(void)
@@ -111,30 +124,11 @@ float read_MCP9808_2(void)
     return Temp;
 }
 
-float read_SI7021(void)
-{
-    // Variable decleration
-    float Humidity = 0;
-    uint8_t data[2] = {0,0};
-    uint8_t command = SI7021_MEADURE_HUMIDITY;
-
-    // Request the humidity data
-    ESP_ERROR_CHECK(i2c_master_transmit(SI7021_dev_handle, &command, sizeof(command), -1));
-
-    // Delay so sensor can convert to RH
-    vTaskDelay(15 / portTICK_PERIOD_MS);
-
-    // Read the humidity data
-    ESP_ERROR_CHECK(i2c_master_receive(SI7021_dev_handle, data, sizeof(data), -1));
-    
-    // Convert to readable humidity
-    Humidity = ((125 * ((data[0] << 8) | data[1])) / 65536) - 6;
-    
-    return Humidity;
-}
-
 void app_main(void)
 {
+    // Configure GPIO
+    GPIO_init();
+
     // Initialize i2c
     i2c_init();
 
@@ -146,11 +140,15 @@ void app_main(void)
     float Temp_2;
     Temp_2 = read_MCP9808_2();
 
-    // Read humidity from SI7021
-    float Humidity;
-    Humidity = read_SI7021();
-
+    // Print sensor values
     printf("Temperature: %.4f °C\n", Temp);
     printf("Temperature_2: %.4f °C\n", Temp_2);
-    printf("Humidity: %f%%\n", Humidity);
+
+    esp_deep_sleep_enable_gpio_wakeup(0x33, ESP_GPIO_WAKEUP_GPIO_HIGH);
+
+    // Set sleep duration (optional, for time-based wakeup)
+    esp_sleep_enable_timer_wakeup(10 * 1000000); // 10 seconds
+
+    // Enter deep sleep
+    esp_deep_sleep_start();
 }
