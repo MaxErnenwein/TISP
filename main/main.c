@@ -16,19 +16,30 @@
 i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
 
-/*void WiFi_Bluetooth_deinit(void)
-{
-    nimble_port_stop();
-    nimble_port_deinit();
-    esp_bluedroid_disable();
-    esp_bluedroid_deinit();
-    esp_bt_controller_disable();
-    esp_bt_controller_deinit();
-    esp_wifi_stop();
-}*/
+void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
+    esp_default_wake_deep_sleep();
+    static RTC_RODATA_ATTR const char fmt_str[] = "Wake From Deep Sleep\n";
+    esp_rom_printf(fmt_str);
+}
 
-void GPIO_init(void)
-{
+void initial_startup(void) {
+    printf("Initial Startup\n");
+}
+
+void deep_sleep(void) {
+    // Set GPIO pins 0 and 1 for wakeup
+    esp_deep_sleep_enable_gpio_wakeup(0x33, ESP_GPIO_WAKEUP_GPIO_HIGH);
+
+    // Set sleep duration
+    esp_sleep_enable_timer_wakeup(10 * 1000000); // 60 seconds
+
+    printf("Entering Deep Sleep\n");
+
+    // Enter deep sleep
+    esp_deep_sleep_start();
+}
+
+void GPIO_init(void) {
     // Configure GPIO pins 0 and 1 as inputs to wake up from deep sleep
     gpio_config_t io_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_0) | (1 << GPIO_NUM_1),
@@ -39,8 +50,7 @@ void GPIO_init(void)
     gpio_config(&io_conf);
 }
 
-void i2c_init(void)
-{
+void i2c_init(void) {
     // Configure the I2C master device
     i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
@@ -74,8 +84,7 @@ void i2c_init(void)
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
 }
 
-float read_MCP9808(void)
-{
+float read_MCP9808(void) {
     // Variable decleration
     float Temp;
     uint8_t data[2];
@@ -99,8 +108,7 @@ float read_MCP9808(void)
     return Temp;
 }
 
-float read_MCP9808_2(void)
-{
+float read_MCP9808_2(void) {
     // Variable decleration
     float Temp;
     uint8_t data[2];
@@ -126,6 +134,22 @@ float read_MCP9808_2(void)
 
 void app_main(void)
 {
+    // Get reason for esp32 reset
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+
+    // If this is a reset and not a wakeup form deep sleep, run the initial startup
+    if (reset_reason == ESP_RST_POWERON) {
+        initial_startup();
+    } else if (reset_reason == ESP_RST_DEEPSLEEP) {
+        // Get reason for wakeup form deep sleep
+        esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
+            printf("GPIO Wakeup\n");
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+            printf("Timer Wakeup\n");
+        }
+    }
+
     // Configure GPIO
     GPIO_init();
 
@@ -144,11 +168,6 @@ void app_main(void)
     printf("Temperature: %.4f °C\n", Temp);
     printf("Temperature_2: %.4f °C\n", Temp_2);
 
-    esp_deep_sleep_enable_gpio_wakeup(0x33, ESP_GPIO_WAKEUP_GPIO_HIGH);
-
-    // Set sleep duration (optional, for time-based wakeup)
-    esp_sleep_enable_timer_wakeup(10 * 1000000); // 10 seconds
-
     // Enter deep sleep
-    esp_deep_sleep_start();
+    deep_sleep();
 }
