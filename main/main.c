@@ -4,10 +4,20 @@
 #include "freertos/task.h"
 #include "esp_sleep.h"
 #include "driver/gpio.h"
+#include "hal/spi_types.h"
+#include "driver/spi_common.h"
+#include "driver/spi_master.h"
 
 #define TEST_I2C_PORT 0
 #define I2C_MASTER_SCL_IO 3
 #define I2C_MASTER_SDA_IO 2
+
+#define SPI_MOSI_IO 7
+#define SPI_MISO_IO -1
+#define SPI_SCLK_IO 6
+#define SPI_QUADWP_IO -1
+#define SPI_QUADHD_IO -1
+#define SPI_CS_IO 10
 
 #define MCP9808_SENSOR_ADDR                 0x18
 #define MCP9808_SENSOR_ADDR_2               0x1C
@@ -15,6 +25,7 @@
 
 i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
+spi_device_handle_t EPD_dev_handle;
 
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
     esp_default_wake_deep_sleep();
@@ -28,10 +39,10 @@ void initial_startup(void) {
 
 void deep_sleep(void) {
     // Set GPIO pins 0 and 1 for wakeup
-    esp_deep_sleep_enable_gpio_wakeup(0x33, ESP_GPIO_WAKEUP_GPIO_HIGH);
+    esp_deep_sleep_enable_gpio_wakeup(0x03, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(10 * 1000000); // 60 seconds
+    esp_sleep_enable_timer_wakeup(60 * 1000000); // 60 seconds
 
     printf("Entering Deep Sleep\n");
 
@@ -82,6 +93,29 @@ void i2c_init(void) {
     // Add devices to I2C bus
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg, &MCP9808_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
+}
+
+void SPI_init(void) {
+
+    const spi_bus_config_t spi_bus_config = {
+        .mosi_io_num = SPI_MOSI_IO,
+        .miso_io_num = SPI_MISO_IO,
+        .sclk_io_num = SPI_SCLK_IO,
+        .quadwp_io_num = SPI_QUADWP_IO,
+        .quadhd_io_num = SPI_QUADHD_IO,
+    };
+
+    spi_device_interface_config_t EPD_cfg = {
+        .clock_speed_hz = 10000000,
+        .spics_io_num = SPI_CS_IO,
+        .queue_size = 7,
+    };
+
+    // Initialize the SPI bus
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &spi_bus_config, SPI_DMA_DISABLED));
+
+    // Add device to SPI bus
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
 }
 
 float read_MCP9808(void) {
@@ -155,6 +189,9 @@ void app_main(void)
 
     // Initialize i2c
     i2c_init();
+
+    // Initialize SPI
+    SPI_init();
 
     // Read temp from MCP9808
     float Temp;
