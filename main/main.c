@@ -7,17 +7,36 @@
 #include "hal/spi_types.h"
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
+#include <string.h>
 
 #define TEST_I2C_PORT 0
 #define I2C_MASTER_SCL_IO 3
-#define I2C_MASTER_SDA_IO 2
+#define I2C_MASTER_SDA_IO 1
 
 #define SPI_MOSI_IO 7
-#define SPI_MISO_IO -1
+#define SPI_MISO_IO 2
 #define SPI_SCLK_IO 6
 #define SPI_QUADWP_IO -1
 #define SPI_QUADHD_IO -1
 #define SPI_CS_IO 10
+
+#define EPD_RST_IO 7
+#define EPD_DC_IO 5
+#define EPD_BUSY_IO 9
+
+#define EPD_RST_PIN 4
+#define EPD_BUSY_PIN 19
+#define EPD_DC_PIN 5
+#define EPD_CS_PIN 10
+#define EPD_MOSI_PIN 7
+#define EPD_SCK_PIN 6
+#define UWORD uint16_t
+#define UBYTE uint8_t
+#define GPIO_PIN_RESET 0
+#define GPIO_PIN_SET 1
+
+#define EPD_4IN2_V2_WIDTH 400
+#define EPD_4IN2_V2_HEIGHT 300
 
 #define MCP9808_SENSOR_ADDR                 0x18
 #define MCP9808_SENSOR_ADDR_2               0x1C
@@ -38,8 +57,8 @@ void initial_startup(void) {
 }
 
 void deep_sleep(void) {
-    // Set GPIO pins 0 and 1 for wakeup
-    esp_deep_sleep_enable_gpio_wakeup(0x03, ESP_GPIO_WAKEUP_GPIO_HIGH);
+    // Set GPIO pin 0 for wakeup
+    esp_deep_sleep_enable_gpio_wakeup(0x01, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
     esp_sleep_enable_timer_wakeup(60 * 1000000); // 60 seconds
@@ -51,14 +70,30 @@ void deep_sleep(void) {
 }
 
 void GPIO_init(void) {
-    // Configure GPIO pins 0 and 1 as inputs to wake up from deep sleep
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_0) | (1 << GPIO_NUM_1),
+    // Configure GPIO pin 0 as the inputs to wake up from deep sleep
+    gpio_config_t sleep_io_conf = {
+        .pin_bit_mask = (1 << GPIO_NUM_0),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
-    gpio_config(&io_conf);
+    gpio_config(&sleep_io_conf);
+
+    // EPD pins
+    gpio_config_t epd_o_conf = {
+        .pin_bit_mask = (1 << GPIO_NUM_4) | (1 << GPIO_NUM_5) | (1 << GPIO_NUM_6) | (1 << GPIO_NUM_10),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&epd_o_conf);
+    gpio_config_t epd_i_conf = {
+        .pin_bit_mask = (1 << GPIO_NUM_19),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&epd_i_conf);
 }
 
 void i2c_init(void) {
@@ -116,6 +151,26 @@ void SPI_init(void) {
 
     // Add device to SPI bus
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
+}
+
+void epd_cmd(const uint8_t cmd)
+{
+    spi_transaction_t EPD_command =  {
+        .length = 8,
+        .tx_buffer = &cmd,
+        .user = 0,
+    };
+    ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_command));
+}
+
+void epd_data(const uint8_t data)
+{
+    spi_transaction_t EPD_data =  {
+        .length = 8,
+        .tx_buffer = &data,
+        .user = 0,
+    };
+    ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_data));
 }
 
 float read_MCP9808(void) {
