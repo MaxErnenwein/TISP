@@ -9,38 +9,32 @@
 #include "driver/spi_master.h"
 #include <string.h>
 
-#define TEST_I2C_PORT 0
-#define I2C_MASTER_SCL_IO 3
-#define I2C_MASTER_SDA_IO 1
+#define GPIO_PIN_RESET  0
+#define GPIO_PIN_SET    1
 
-#define SPI_MOSI_IO 7
-#define SPI_MISO_IO 2
-#define SPI_SCLK_IO 6
-#define SPI_QUADWP_IO -1
-#define SPI_QUADHD_IO -1
-#define SPI_CS_IO 10
+#define TEST_I2C_PORT       0
+#define I2C_MASTER_SCL_IO   3
+#define I2C_MASTER_SDA_IO   1
 
-#define EPD_RST_IO 7
-#define EPD_DC_IO 5
-#define EPD_BUSY_IO 9
+#define SPI_MOSI_IO     7
+#define SPI_MISO_IO     2
+#define SPI_SCLK_IO     6
+#define SPI_CS_IO       10
+#define SPI_QUADWP_IO   -1
+#define SPI_QUADHD_IO   -1
 
-#define EPD_RST_PIN 4
-#define EPD_BUSY_PIN 19
-#define EPD_DC_PIN 5
-#define EPD_CS_PIN 10
-#define EPD_MOSI_PIN 7
-#define EPD_SCK_PIN 6
-#define UWORD uint16_t
-#define UBYTE uint8_t
-#define GPIO_PIN_RESET 0
-#define GPIO_PIN_SET 1
+#define EPD_RST_PIN         4
+#define EPD_BUSY_PIN        19
+#define EPD_DC_PIN          5
+#define EPD_CS_PIN          10
+#define EPD_MOSI_PIN        7
+#define EPD_SCK_PIN         6
+#define EPD_4IN2_V2_WIDTH   400
+#define EPD_4IN2_V2_HEIGHT  300
 
-#define EPD_4IN2_V2_WIDTH 400
-#define EPD_4IN2_V2_HEIGHT 300
-
-#define MCP9808_SENSOR_ADDR                 0x18
-#define MCP9808_SENSOR_ADDR_2               0x1C
-#define MCP9808_MEASURE_TEMPERATURE         0x05
+#define MCP9808_SENSOR_ADDR         0x18
+#define MCP9808_SENSOR_ADDR_2       0x1C
+#define MCP9808_MEASURE_TEMPERATURE 0x05
 
 i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
@@ -153,23 +147,27 @@ void SPI_init(void) {
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
 }
 
-void epd_cmd(const uint8_t cmd)
-{
+void EPD_send_cmd(const uint8_t cmd) {
+    // Set d/c pin to command
+    gpio_set_level(EPD_DC_PIN, 0);
+    // Create the SPI transaction
     spi_transaction_t EPD_command =  {
         .length = 8,
         .tx_buffer = &cmd,
-        .user = 0,
     };
+    // Send command
     ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_command));
 }
 
-void epd_data(const uint8_t data)
-{
+void EPD_send_data(uint8_t* data) {
+    // Set d/c pin to data
+    gpio_set_level(EPD_DC_PIN, 1);
+    // Create teh SPI transaction
     spi_transaction_t EPD_data =  {
-        .length = 8,
-        .tx_buffer = &data,
-        .user = 0,
+        .length = 8 * sizeof(data),
+        .tx_buffer = data,
     };
+    // Send data
     ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_data));
 }
 
