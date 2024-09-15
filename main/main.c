@@ -35,9 +35,13 @@
 #define EPD_4IN2_V2_HEIGHT  300
 
 #define EPD_CMD_WRITE_BW 0x24
-#define EPD_CMD_CONF_UPDATE_MODE 0x22
+#define EPD_CMD_CONF_UPDATE_MODE_2 0x22
+#define EPD_CMD_CONF_UPDATE_MODE_1 0x21
 #define EPD_CMD_UPDATE_DISPLAY 0x20
 #define EPD_CMD_ENTER_DEEP_SLEEP 0x10
+#define EPD_CMD_SET_DATA_ENTRY_MODE 0x11
+#define EPD_CMD_SET_RAM_X_ADDRESS 0x44
+#define EPD_CMD_SET_RAM_Y_ADDRESS 0x45
 
 #define MCP9808_SENSOR_ADDR         0x18
 #define MCP9808_SENSOR_ADDR_2       0x1C
@@ -139,6 +143,7 @@ void SPI_init(void) {
         .sclk_io_num = SPI_SCLK_IO,
         .quadwp_io_num = SPI_QUADWP_IO,
         .quadhd_io_num = SPI_QUADHD_IO,
+        .max_transfer_sz = 15000,
     };
 
     spi_device_interface_config_t EPD_cfg = {
@@ -242,7 +247,7 @@ void EPD_reset(void) {
 
 static void EPD_turn_on_display(void) {
     // Set update mode
-    EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE, COMMAND);
+    EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_2, COMMAND);
 	EPD_send_byte(0xF7, DATA);
     // Update display
     EPD_send_byte(EPD_CMD_UPDATE_DISPLAY, COMMAND);
@@ -255,12 +260,51 @@ void EPD_deep_sleep(void) {
     EPD_send_byte(0x01, DATA);
 }
 
+static void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end) {
+    // Set RAM start and end X position
+    EPD_send_byte(EPD_CMD_SET_RAM_X_ADDRESS, COMMAND);
+    EPD_send_byte((X_start >> 3) & 0xFF, DATA); // Divide by 8 since x direction is divided into bytes
+    EPD_send_byte((X_end >> 3) & 0xFF, DATA);
+	
+    // Set RAM start and end y position
+    EPD_send_byte(EPD_CMD_SET_RAM_Y_ADDRESS, COMMAND);
+    EPD_send_byte(Y_start & 0xFF, DATA); // y direction is divided into bits, so two bytes need to be sent
+    EPD_send_byte((Y_start >> 8) & 0xFF, DATA);
+    EPD_send_byte(Y_end & 0xFF, DATA);
+    EPD_send_byte((Y_end >> 8) & 0xFF, DATA);
+}
+
 void EPD_init(void) {
     // Reset the display
     EPD_reset();
-    EPD_turn_on_display();
+
+    // Configure update mode
+    EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_1, COMMAND);
+    EPD_send_byte(0x40, DATA);
 	
+    // Set data entry mode to x address
+    EPD_send_byte(EPD_CMD_SET_DATA_ENTRY_MODE, COMMAND);
+    EPD_send_byte(0x03, DATA);
+		
+	EPD_set_windows(0, 0, EPD_4IN2_V2_WIDTH-1, EPD_4IN2_V2_HEIGHT-1);
+	 
     EPD_busy();
+}
+
+void EPD_clear(void) {
+    // Calculate width and height
+    uint16_t Width = EPD_4IN2_V2_WIDTH / 8; // Divide by 8 since bytes are being sent
+    uint16_t Height = EPD_4IN2_V2_HEIGHT;
+
+    // Write to screen in BW
+    EPD_send_byte(EPD_CMD_WRITE_BW, COMMAND);
+    // Set each pixel to 1 (black)
+    for (int i = 0; i < Height*Width; i++) {
+        EPD_send_byte(0xFF, DATA);
+    }
+
+    // Turn on the display
+    EPD_turn_on_display();
 }
 
 void app_main(void)
@@ -291,6 +335,7 @@ void app_main(void)
     SPI_init();
 
     EPD_init();
+    EPD_clear();
     EPD_deep_sleep();
 
     // Read temp from MCP9808
