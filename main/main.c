@@ -11,6 +11,8 @@
 
 #define GPIO_PIN_RESET  0
 #define GPIO_PIN_SET    1
+#define COMMAND 0
+#define DATA 1
 
 #define TEST_I2C_PORT       0
 #define I2C_MASTER_SCL_IO   3
@@ -31,6 +33,11 @@
 #define EPD_SCK_PIN         6
 #define EPD_4IN2_V2_WIDTH   400
 #define EPD_4IN2_V2_HEIGHT  300
+
+#define EPD_CMD_WRITE_BW 0x24
+#define EPD_CMD_CONF_UPDATE_MODE 0x22
+#define EPD_CMD_UPDATE_DISPLAY 0x20
+#define EPD_CMD_ENTER_DEEP_SLEEP 0x10
 
 #define MCP9808_SENSOR_ADDR         0x18
 #define MCP9808_SENSOR_ADDR_2       0x1C
@@ -147,28 +154,22 @@ void SPI_init(void) {
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
 }
 
-void EPD_send_cmd(const uint8_t cmd) {
-    // Set d/c pin to command
-    gpio_set_level(EPD_DC_PIN, 0);
-    // Create the SPI transaction
-    spi_transaction_t EPD_command =  {
-        .length = 8,
-        .tx_buffer = &cmd,
-    };
-    // Send command
-    ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_command));
-}
+void EPD_send_byte(const uint8_t byte, bool dc) {
+    // Set d/c pin if the byte is data or a command
+    if (dc == COMMAND) {
+        gpio_set_level(EPD_DC_PIN, COMMAND);
+    } else {
+        gpio_set_level(EPD_DC_PIN, DATA);
+    }
 
-void EPD_send_data(uint8_t* data) {
-    // Set d/c pin to data
-    gpio_set_level(EPD_DC_PIN, 1);
-    // Create teh SPI transaction
-    spi_transaction_t EPD_data =  {
-        .length = 8 * sizeof(data),
-        .tx_buffer = data,
+    // Create the SPI transaction
+    spi_transaction_t EPD_byte =  {
+        .length = 8,
+        .tx_buffer = &byte,
     };
-    // Send data
-    ESP_ERROR_CHECK(spi_device_polling_transmit(EPD_dev_handle, &EPD_data));
+
+    // Send command
+    ESP_ERROR_CHECK(spi_device_transmit(EPD_dev_handle, &EPD_byte));
 }
 
 float read_MCP9808(void) {
@@ -219,6 +220,49 @@ float read_MCP9808_2(void) {
     return Temp;
 }
 
+void EPD_busy(void) {
+    printf("EPD Busy\n");
+    // Wait until the EPD is not busy
+    while(gpio_get_level(EPD_BUSY_PIN) == 1);
+    printf("EPD Not Busy\n");
+}
+
+void EPD_reset(void) {
+    // Set reset pin low
+    gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
+    // Delay 200us
+    vTaskDelay(2 / portTICK_PERIOD_MS);
+    // Set reset pin high
+    gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
+    // Delay 200us
+    vTaskDelay(2 / portTICK_PERIOD_MS);
+    // Wait for display
+    EPD_busy(); 
+}
+
+static void EPD_turn_on_display(void) {
+    // Set update mode
+    EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE, COMMAND);
+	EPD_send_byte(0xF7, DATA);
+    // Update display
+    EPD_send_byte(EPD_CMD_UPDATE_DISPLAY, COMMAND);
+    EPD_busy();
+}
+
+void EPD_deep_sleep(void) {
+    // Put the display into deep sleep
+    EPD_send_byte(EPD_CMD_ENTER_DEEP_SLEEP, COMMAND);
+    EPD_send_byte(0x01, DATA);
+}
+
+void EPD_init(void) {
+    // Reset the display
+    EPD_reset();
+    EPD_turn_on_display();
+	
+    EPD_busy();
+}
+
 void app_main(void)
 {
     // Get reason for esp32 reset
@@ -245,6 +289,9 @@ void app_main(void)
 
     // Initialize SPI
     SPI_init();
+
+    EPD_init();
+    EPD_deep_sleep();
 
     // Read temp from MCP9808
     float Temp;
