@@ -1,60 +1,51 @@
-#include <stdio.h>
-#include <driver/i2c_master.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_sleep.h"
-#include "driver/gpio.h"
-#include "hal/spi_types.h"
-#include "driver/spi_common.h"
-#include "driver/spi_master.h"
-#include <string.h>
+// Includes
+#include "../includes/main.h"
 
-#define GPIO_PIN_RESET  0
-#define GPIO_PIN_SET    1
-#define COMMAND 0
-#define DATA 1
+void app_main(void)
+{
+    // Get reason for esp32 reset
+    esp_reset_reason_t reset_reason = esp_reset_reason();
 
-#define TEST_I2C_PORT       0
-#define I2C_MASTER_SCL_IO   3
-#define I2C_MASTER_SDA_IO   1
+    // If this is a reset and not a wakeup form deep sleep, run the initial startup
+    if (reset_reason == ESP_RST_POWERON) {
+        initial_startup();
+    } else if (reset_reason == ESP_RST_DEEPSLEEP) {
+        // Get reason for wakeup form deep sleep
+        esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+        if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
+            printf("GPIO Wakeup\n");
+        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+            printf("Timer Wakeup\n");
+        }
+    }
 
-#define SPI_MOSI_IO     7
-#define SPI_MISO_IO     2
-#define SPI_SCLK_IO     6
-#define SPI_CS_IO       10
-#define SPI_QUADWP_IO   -1
-#define SPI_QUADHD_IO   -1
+    // Configure GPIO
+    GPIO_init();
 
-#define EPD_RST_PIN         4
-#define EPD_BUSY_PIN        19
-#define EPD_DC_PIN          5
-#define EPD_CS_PIN          10
-#define EPD_MOSI_PIN        7
-#define EPD_SCK_PIN         6
-#define EPD_4IN2_V2_WIDTH   400
-#define EPD_4IN2_V2_HEIGHT  300
+    // Initialize i2c
+    i2c_init();
 
-#define EPD_CMD_WRITE_BW 0x24
-#define EPD_CMD_CONF_UPDATE_MODE_2 0x22
-#define EPD_CMD_CONF_UPDATE_MODE_1 0x21
-#define EPD_CMD_UPDATE_DISPLAY 0x20
-#define EPD_CMD_ENTER_DEEP_SLEEP 0x10
-#define EPD_CMD_SET_DATA_ENTRY_MODE 0x11
-#define EPD_CMD_SET_RAM_X_ADDRESS 0x44
-#define EPD_CMD_SET_RAM_Y_ADDRESS 0x45
+    // Initialize SPI
+    SPI_init();
 
-#define MCP9808_SENSOR_ADDR         0x18
-#define MCP9808_SENSOR_ADDR_2       0x1C
-#define MCP9808_MEASURE_TEMPERATURE 0x05
+    EPD_init();
+    EPD_clear();
+    EPD_deep_sleep();
 
-i2c_master_dev_handle_t MCP9808_dev_handle;
-i2c_master_dev_handle_t MCP9808_dev_handle_2;
-spi_device_handle_t EPD_dev_handle;
+    // Read temp from MCP9808
+    float Temp;
+    Temp = read_MCP9808();
 
-void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
-    esp_default_wake_deep_sleep();
-    static RTC_RODATA_ATTR const char fmt_str[] = "Wake From Deep Sleep\n";
-    esp_rom_printf(fmt_str);
+    // Read temp from MCP9808
+    float Temp_2;
+    Temp_2 = read_MCP9808_2();
+
+    // Print sensor values
+    printf("Temperature: %.4f °C\n", Temp);
+    printf("Temperature_2: %.4f °C\n", Temp_2);
+
+    // Enter deep sleep
+    deep_sleep();
 }
 
 void initial_startup(void) {
@@ -245,7 +236,7 @@ void EPD_reset(void) {
     EPD_busy(); 
 }
 
-static void EPD_turn_on_display(void) {
+void EPD_turn_on_display(void) {
     // Set update mode
     EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_2, COMMAND);
 	EPD_send_byte(0xF7, DATA);
@@ -260,7 +251,7 @@ void EPD_deep_sleep(void) {
     EPD_send_byte(0x01, DATA);
 }
 
-static void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end) {
+void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end) {
     // Set RAM start and end X position
     EPD_send_byte(EPD_CMD_SET_RAM_X_ADDRESS, COMMAND);
     EPD_send_byte((X_start >> 3) & 0xFF, DATA); // Divide by 8 since x direction is divided into bytes
@@ -305,51 +296,4 @@ void EPD_clear(void) {
 
     // Turn on the display
     EPD_turn_on_display();
-}
-
-void app_main(void)
-{
-    // Get reason for esp32 reset
-    esp_reset_reason_t reset_reason = esp_reset_reason();
-
-    // If this is a reset and not a wakeup form deep sleep, run the initial startup
-    if (reset_reason == ESP_RST_POWERON) {
-        initial_startup();
-    } else if (reset_reason == ESP_RST_DEEPSLEEP) {
-        // Get reason for wakeup form deep sleep
-        esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-        if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            printf("GPIO Wakeup\n");
-        } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            printf("Timer Wakeup\n");
-        }
-    }
-
-    // Configure GPIO
-    GPIO_init();
-
-    // Initialize i2c
-    i2c_init();
-
-    // Initialize SPI
-    SPI_init();
-
-    EPD_init();
-    EPD_clear();
-    EPD_deep_sleep();
-
-    // Read temp from MCP9808
-    float Temp;
-    Temp = read_MCP9808();
-
-    // Read temp from MCP9808
-    float Temp_2;
-    Temp_2 = read_MCP9808_2();
-
-    // Print sensor values
-    printf("Temperature: %.4f °C\n", Temp);
-    printf("Temperature_2: %.4f °C\n", Temp_2);
-
-    // Enter deep sleep
-    deep_sleep();
 }
