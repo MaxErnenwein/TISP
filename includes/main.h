@@ -72,6 +72,8 @@ void EPD_display_image(unsigned char* image);
 void EPD_clear(void);
 void EPD_deep_sleep(void);
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end);
+void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image);
+void EPD_draw_char(uint16_t x, uint16_t y, int font_character, unsigned char* image);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
 

@@ -1,6 +1,7 @@
 // Includes
 #include "../includes/main.h"
 #include "../includes/images.h"
+#include "../includes/font8.h"
 
 void app_main(void)
 {
@@ -25,9 +26,11 @@ void app_main(void)
             // Initialize SPI
             SPI_init();
 
+            EPD_draw_pixel(0, 1, test_image);
+
             // Clear EPD
             EPD_init();
-            EPD_clear();
+            EPD_display_image(test_image);
             EPD_deep_sleep();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
             printf("Timer Wakeup\n");
@@ -62,6 +65,18 @@ void app_main(void)
     deep_sleep();
 }
 
+void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
+    // Check to see if pixel is on screen
+    if (x > EPD_4IN2_V2_WIDTH || y > EPD_4IN2_V2_HEIGHT) {
+        printf("pixel out of screen range");
+        return;
+    }
+    // Get byte number
+    int byte = (y * 50 + (x >> 3));
+    // Draw to pixel in that byte
+    image[byte] &= ~(1 << (7 - (x % 8)));
+}
+
 void initial_startup(void) {
     printf("Initial Startup\n");
 
@@ -85,7 +100,7 @@ void deep_sleep(void) {
     esp_deep_sleep_enable_gpio_wakeup(0x01, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(10 * 1000000); // 10 seconds
+    esp_sleep_enable_timer_wakeup(60 * 1000000); // 60 seconds
 
     printf("Entering Deep Sleep\n");
 
