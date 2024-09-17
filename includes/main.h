@@ -60,7 +60,7 @@ spi_device_handle_t EPD_dev_handle;
 // Function declerations
 void initial_startup(void);
 void GPIO_init(void);
-void i2c_init(void);
+void I2C_init(void);
 void SPI_init(void);
 void deep_sleep(void);
 void EPD_init(void);
@@ -68,6 +68,7 @@ void EPD_send_byte(const uint8_t byte, bool dc);
 void EPD_busy(void);
 void EPD_reset(void);
 void EPD_turn_on_display(void);
+void EPD_display_image(unsigned char* image);
 void EPD_clear(void);
 void EPD_deep_sleep(void);
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end);

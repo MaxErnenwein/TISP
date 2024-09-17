@@ -1,5 +1,6 @@
 // Includes
 #include "../includes/main.h"
+#include "../includes/images.h"
 
 void app_main(void)
 {
@@ -14,23 +15,36 @@ void app_main(void)
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
             printf("GPIO Wakeup\n");
+
+            // Configure GPIO
+            GPIO_init();
+
+            // Initialize i2c
+            I2C_init();
+
+            // Initialize SPI
+            SPI_init();
+
+            // Clear EPD
+            EPD_init();
+            EPD_clear();
+            EPD_deep_sleep();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
             printf("Timer Wakeup\n");
+            // Configure GPIO
+            GPIO_init();
+
+            // Initialize i2c
+            I2C_init();
+
+            // Initialize SPI
+            SPI_init();
+
+            // Keep current EPD screen
+            EPD_init();
+            EPD_deep_sleep();
         }
     }
-
-    // Configure GPIO
-    GPIO_init();
-
-    // Initialize i2c
-    i2c_init();
-
-    // Initialize SPI
-    SPI_init();
-
-    EPD_init();
-    EPD_clear();
-    EPD_deep_sleep();
 
     // Read temp from MCP9808
     float Temp;
@@ -50,6 +64,20 @@ void app_main(void)
 
 void initial_startup(void) {
     printf("Initial Startup\n");
+
+    // Configure GPIO
+    GPIO_init();
+
+    // Initialize i2c
+    I2C_init();
+
+    // Initialize SPI
+    SPI_init();
+
+    // Display startup image
+    EPD_init();
+    EPD_display_image(butterfly_image);
+    EPD_deep_sleep();
 }
 
 void deep_sleep(void) {
@@ -57,7 +85,7 @@ void deep_sleep(void) {
     esp_deep_sleep_enable_gpio_wakeup(0x01, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(60 * 1000000); // 60 seconds
+    esp_sleep_enable_timer_wakeup(10 * 1000000); // 10 seconds
 
     printf("Entering Deep Sleep\n");
 
@@ -92,7 +120,7 @@ void GPIO_init(void) {
     gpio_config(&epd_i_conf);
 }
 
-void i2c_init(void) {
+void I2C_init(void) {
     // Configure the I2C master device
     i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
@@ -278,7 +306,7 @@ void EPD_init(void) {
     EPD_send_byte(0x03, DATA);
 		
 	EPD_set_windows(0, 0, EPD_4IN2_V2_WIDTH-1, EPD_4IN2_V2_HEIGHT-1);
-	 
+
     EPD_busy();
 }
 
@@ -292,6 +320,22 @@ void EPD_clear(void) {
     // Set each pixel to 1 (black)
     for (int i = 0; i < Height*Width; i++) {
         EPD_send_byte(0xFF, DATA);
+    }
+
+    // Turn on the display
+    EPD_turn_on_display();
+}
+
+void EPD_display_image(unsigned char* image) {
+    // Calculate width and height
+    uint16_t Width = EPD_4IN2_V2_WIDTH / 8; // Divide by 8 since bytes are being sent
+    uint16_t Height = EPD_4IN2_V2_HEIGHT;
+
+    // Write to screen in BW
+    EPD_send_byte(EPD_CMD_WRITE_BW, COMMAND);
+    // Set each pixel to 1 (black)
+    for (int i = 0; i < Height*Width; i++) {
+        EPD_send_byte(image[i], DATA);
     }
 
     // Turn on the display
