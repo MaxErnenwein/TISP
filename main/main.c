@@ -15,55 +15,11 @@ void app_main(void)
         // Get reason for wakeup form deep sleep
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            printf("GPIO Wakeup\n");
-
-            // Configure GPIO
-            GPIO_init();
-
-            // Initialize i2c
-            I2C_init();
-
-            // Initialize SPI
-            SPI_init();
-
-            // Write strings to display:
-            char test_string[] = "TEST STRING LARGE";
-            EPD_draw_string(0, 1, test_string, sizeof(test_string), FONT12_HEIGHT, test_image);
-            char test_string_2[] = "TEST STRING SMALL";
-            EPD_draw_string(0, 15, test_string_2, sizeof(test_string_2), FONT8_HEIGHT, test_image);
-
-            // Clear EPD
-            EPD_init();
-            EPD_display_image(test_image);
-            EPD_deep_sleep();
+            GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            printf("Timer Wakeup\n");
-            // Configure GPIO
-            GPIO_init();
-
-            // Initialize i2c
-            I2C_init();
-
-            // Initialize SPI
-            SPI_init();
-
-            // Keep current EPD screen
-            EPD_init();
-            EPD_deep_sleep();
+            timer_wakeup_startup();
         }
     }
-
-    // Read temp from MCP9808
-    float Temp;
-    Temp = read_MCP9808();
-
-    // Read temp from MCP9808
-    float Temp_2;
-    Temp_2 = read_MCP9808_2();
-
-    // Print sensor values
-    printf("Temperature: %.4f °C\n", Temp);
-    printf("Temperature_2: %.4f °C\n", Temp_2);
 
     // Enter deep sleep
     deep_sleep();
@@ -143,13 +99,45 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
         // Calculate index into font table
         index = (((int)character) - 32) * font_size;
         // Draw the character
-        EPD_draw_char(x + i*font_width + i, y, index, font_size, test_image);
+        EPD_draw_char(x + i*font_width + i, y, index, font_size, image);
     }
 }
 
 void initial_startup(void) {
     printf("Initial Startup\n");
 
+    // Configure peripherals
+    peripherals_init();
+
+    // Display startup image
+    EPD_init();
+    EPD_display_image(butterfly_image);
+    EPD_deep_sleep();
+}
+
+void GPIO_wakeup_startup(void) {
+    printf("GPIO Wakeup\n");
+
+    // Configure peripherals
+    peripherals_init();
+
+    // Draw sensor data to image
+    EPD_draw_sensor_data();
+
+    // Display current sensor data
+    EPD_init();
+    EPD_display_image(current_data_image);
+    EPD_deep_sleep();
+}
+
+void timer_wakeup_startup(void) {
+    printf("Timer Wakeup\n");
+
+    // Configure peripherals
+    peripherals_init();
+}
+
+void peripherals_init(void) {
     // Configure GPIO
     GPIO_init();
 
@@ -158,12 +146,6 @@ void initial_startup(void) {
 
     // Initialize SPI
     SPI_init();
-
-    // Display startup image
-    EPD_init();
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_display_image(butterfly_image);
-    EPD_deep_sleep();
 }
 
 void deep_sleep(void) {
@@ -262,6 +244,32 @@ void SPI_init(void) {
 
     // Add device to SPI bus
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
+}
+
+void EPD_draw_sensor_data(void) {
+    // Read temp from MCP9808
+    float Temp;
+    Temp = read_MCP9808();
+
+    // Read temp from MCP9808
+    float Temp_2;
+    Temp_2 = read_MCP9808_2();
+
+    // Declare strings
+    char temp_string[20];
+    char temp_string_2[22];
+
+    // Convert temperature value to string
+    snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
+    snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
+
+    // Draw temperature values to display
+    EPD_draw_string(0, 1, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
+    EPD_draw_string(0, 15, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
+
+    // Print sensor values
+    printf("Temperature: %.4f °C\n", Temp);
+    printf("Temperature_2: %.4f °C\n", Temp_2);
 }
 
 void EPD_send_byte(const uint8_t byte, bool dc) {

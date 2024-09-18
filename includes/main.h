@@ -64,6 +64,9 @@ spi_device_handle_t EPD_dev_handle;
 
 // Function declerations
 void initial_startup(void);
+void timer_wakeup_startup(void);
+void GPIO_wakeup_startup(void);
+void peripherals_init(void);
 void GPIO_init(void);
 void I2C_init(void);
 void SPI_init(void);
@@ -80,6 +83,7 @@ void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image);
 void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_size, unsigned char* image);
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
+void EPD_draw_sensor_data(void);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
 
