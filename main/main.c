@@ -1,7 +1,7 @@
 // Includes
 #include "../includes/main.h"
 #include "../includes/images.h"
-#include "../includes/font8.h"
+#include "../includes/fonts.h"
 
 void app_main(void)
 {
@@ -26,7 +26,11 @@ void app_main(void)
             // Initialize SPI
             SPI_init();
 
-            EPD_draw_pixel(0, 1, test_image);
+            //EPD_draw_pixel(0, 1, test_image);
+
+            for (int n = 0; n < 26; n++) {
+                EPD_draw_char(0 + n*7 + n, 1, 396 + n*12, test_image);
+            }
 
             // Clear EPD
             EPD_init();
@@ -77,6 +81,16 @@ void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
     image[byte] &= ~(1 << (7 - (x % 8)));
 }
 
+void EPD_draw_char(uint16_t x, uint16_t y, int font_character, unsigned char* image) {
+    for (int i = 0; i < 12; i++) {
+        for (int j = 0; j < 7; j++) {
+            if((((Font12_Table[font_character + i]) >> (7 - j)) & 0x01) == 0x01) {
+                EPD_draw_pixel(x + j, y + i, image);
+            }
+        }
+    }
+}
+
 void initial_startup(void) {
     printf("Initial Startup\n");
 
@@ -91,6 +105,7 @@ void initial_startup(void) {
 
     // Display startup image
     EPD_init();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     EPD_display_image(butterfly_image);
     EPD_deep_sleep();
 }
