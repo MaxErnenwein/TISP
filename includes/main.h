@@ -19,6 +19,11 @@
 #define COMMAND 0
 #define DATA 1
 
+#define FONT8_HEIGHT 8
+#define FONT8_WIDTH 5
+#define FONT12_HEIGHT 12
+#define FONT12_WIDTH 7
+
 #define TEST_I2C_PORT       0
 #define I2C_MASTER_SCL_IO   3
 #define I2C_MASTER_SDA_IO   1
@@ -73,7 +78,8 @@ void EPD_clear(void);
 void EPD_deep_sleep(void);
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end);
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image);
-void EPD_draw_char(uint16_t x, uint16_t y, int font_character, unsigned char* image);
+void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_size, unsigned char* image);
+void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
 

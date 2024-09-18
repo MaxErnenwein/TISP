@@ -26,11 +26,11 @@ void app_main(void)
             // Initialize SPI
             SPI_init();
 
-            //EPD_draw_pixel(0, 1, test_image);
-
-            for (int n = 0; n < 26; n++) {
-                EPD_draw_char(0 + n*7 + n, 1, 396 + n*12, test_image);
-            }
+            // Write strings to display:
+            char test_string[] = "TEST STRING LARGE";
+            EPD_draw_string(0, 1, test_string, sizeof(test_string), FONT12_HEIGHT, test_image);
+            char test_string_2[] = "TEST STRING SMALL";
+            EPD_draw_string(0, 15, test_string_2, sizeof(test_string_2), FONT8_HEIGHT, test_image);
 
             // Clear EPD
             EPD_init();
@@ -75,19 +75,75 @@ void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
         printf("pixel out of screen range");
         return;
     }
-    // Get byte number
+    // Get byte number in image
     int byte = (y * 50 + (x >> 3));
     // Draw to pixel in that byte
     image[byte] &= ~(1 << (7 - (x % 8)));
 }
 
-void EPD_draw_char(uint16_t x, uint16_t y, int font_character, unsigned char* image) {
-    for (int i = 0; i < 12; i++) {
-        for (int j = 0; j < 7; j++) {
-            if((((Font12_Table[font_character + i]) >> (7 - j)) & 0x01) == 0x01) {
-                EPD_draw_pixel(x + j, y + i, image);
+void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_size, unsigned char* image) {
+    // Get the width of the font
+    int font_width;
+    switch(font_size) {
+        case 8:
+            font_width = FONT8_WIDTH;
+            break;
+        case 12:
+            font_width = FONT12_WIDTH;
+            break;
+        default: 
+            font_width = 0;
+            break;
+    }
+
+    // Loop through each byte in the font
+    for (int i = 0; i < font_size; i++) {
+        // Loop through each pixel in the width of the font
+        for (int j = 0; j < font_width; j++) {
+            // Determine what font table to use
+            if(font_size == 8) {
+                // Check if pixel shoudl be drawn
+                if((((Font8_Table[font_character_index + i]) >> (7 - j)) & 0x01) == 0x01) {
+                    EPD_draw_pixel(x + j, y + i, image);
+                }
+            } else if (font_size == 12) {
+                // Check if pixel shoudl be drawn
+                if((((Font12_Table[font_character_index + i]) >> (7 - j)) & 0x01) == 0x01) {
+                    EPD_draw_pixel(x + j, y + i, image);
+                }
             }
+            
         }
+    }
+}
+
+void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image) {
+    // Variables
+    char character;
+    int index;
+
+    // Get the width of the font
+    int font_width;
+    switch(font_size) {
+        case 8:
+            font_width = FONT8_WIDTH;
+            break;
+        case 12:
+            font_width = FONT12_WIDTH;
+            break;
+        default: 
+            font_width = 0;
+            break;
+    }
+
+    // Print each character in the passed string
+    for (int i = 0; i <= string_size - 2; i++) {
+        // Get the next character
+        character = string[i];
+        // Calculate index into font table
+        index = (((int)character) - 32) * font_size;
+        // Draw the character
+        EPD_draw_char(x + i*font_width + i, y, index, font_size, test_image);
     }
 }
 
