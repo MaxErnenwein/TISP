@@ -264,8 +264,8 @@ void EPD_draw_sensor_data(void) {
     snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
 
     // Draw temperature values to display
-    EPD_draw_string(0, 1, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
-    EPD_draw_string(0, 15, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
+    EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
+    EPD_draw_string(0, 14, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
 
     // Print sensor values
     printf("Temperature: %.4f °C\n", Temp);
@@ -387,6 +387,16 @@ void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_
     EPD_send_byte((Y_end >> 8) & 0xFF, DATA);
 }
 
+void EPD_set_cursor(uint16_t X_start, uint16_t Y_start)
+{
+    EPD_send_byte(0x4E, COMMAND); // SET_RAM_X_ADDRESS_COUNTER
+    EPD_send_byte(X_start & 0xFF, DATA);
+
+    EPD_send_byte(0x4F, COMMAND); // SET_RAM_Y_ADDRESS_COUNTER
+    EPD_send_byte(Y_start & 0xFF, DATA);
+    EPD_send_byte((Y_start >> 8) & 0xFF, DATA);
+}
+
 void EPD_init(void) {
     // Reset the display
     EPD_reset();
@@ -399,7 +409,11 @@ void EPD_init(void) {
     EPD_send_byte(EPD_CMD_SET_DATA_ENTRY_MODE, COMMAND);
     EPD_send_byte(0x03, DATA);
 		
+    // Set the window to the size of the screen
 	EPD_set_windows(0, 0, EPD_4IN2_V2_WIDTH-1, EPD_4IN2_V2_HEIGHT-1);
+
+    // Set the cursor at the origin (Top Left)
+    EPD_set_cursor(0, 0);
 
     EPD_busy();
 }
