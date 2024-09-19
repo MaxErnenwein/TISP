@@ -28,7 +28,7 @@ void app_main(void)
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
     // Check to see if pixel is on screen
     if (x > EPD_4IN2_V2_WIDTH || y > EPD_4IN2_V2_HEIGHT) {
-        printf("pixel out of screen range");
+        printf("pixel out of screen range\n");
         return;
     }
     // Get byte number in image
@@ -103,6 +103,54 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
     }
 }
 
+void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image) {
+    // Calculate the change in x and y directions
+    float X_diff;
+    float Y_diff;
+    X_diff = (X_end - X_start);
+    Y_diff = (Y_end - Y_start);
+    int greater; // The larger change from start to end
+    int lesser; // The smaller change from start to end
+    float ratio; // The ratio of smaller/larger change
+    int main_direction; // Larger change start position
+    int secondary_direction; // Smaller change start position
+    int direction = abs((int)X_diff) >= abs((int)Y_diff); // Determine what direction is the main (larger) one
+
+    // Set variables depending on the main direction
+    if (direction) {
+        greater = X_diff;
+        lesser = Y_diff;
+        ratio = Y_diff / X_diff;
+        main_direction = X_start;
+        secondary_direction = Y_start;
+    } else {
+        greater = Y_diff;
+        lesser = X_diff;
+        ratio = X_diff / Y_diff;
+        main_direction = Y_start;
+        secondary_direction = X_start;
+    }
+
+    // Find the sign for the direction of change
+    int main_sign = (greater >= 0) ? 1 : -1;
+    int secondary_sign = (lesser >= 0) ? 1 : -1;
+
+    // Keep the ratio positive
+    if(ratio < 0) {
+        ratio *= -1;
+    }
+
+    // Draw the line
+    for (int i = 0; i < abs((int)greater) + 1; i++) {
+        // Depending on if x is the main or secondary direction, switch function
+        if (direction) {
+            EPD_draw_pixel(main_direction + (i * main_sign), secondary_direction + (int)(i * ratio * secondary_sign), image);
+        } else {
+            EPD_draw_pixel(secondary_direction + (int)(i * ratio * secondary_sign), main_direction + (i * main_sign), image);
+        }
+    }
+}
+
 void initial_startup(void) {
     printf("Initial Startup\n");
 
@@ -122,7 +170,16 @@ void GPIO_wakeup_startup(void) {
     peripherals_init();
 
     // Draw sensor data to image
-    EPD_draw_sensor_data();
+    //EPD_draw_sensor_data();
+
+    EPD_draw_line(200, 150, 0, 50, current_data_image);
+    EPD_draw_line(50, 0, 200, 150, current_data_image);
+    EPD_draw_line(200, 150, 350, 0, current_data_image);
+    EPD_draw_line(400, 50, 200, 150, current_data_image);
+    EPD_draw_line(200, 150, 400, 250, current_data_image);
+    EPD_draw_line(350, 300, 200, 150, current_data_image);
+    EPD_draw_line(200, 150, 50, 300, current_data_image);
+    EPD_draw_line(0, 250, 200, 150, current_data_image);
 
     // Display current sensor data
     EPD_init();
@@ -387,8 +444,7 @@ void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_
     EPD_send_byte((Y_end >> 8) & 0xFF, DATA);
 }
 
-void EPD_set_cursor(uint16_t X_start, uint16_t Y_start)
-{
+void EPD_set_cursor(uint16_t X_start, uint16_t Y_start) {
     EPD_send_byte(0x4E, COMMAND); // SET_RAM_X_ADDRESS_COUNTER
     EPD_send_byte(X_start & 0xFF, DATA);
 
