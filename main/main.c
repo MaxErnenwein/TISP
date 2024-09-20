@@ -157,9 +157,12 @@ void initial_startup(void) {
     // Configure peripherals
     peripherals_init();
 
+    EPD_draw_sensor_data();
+
     // Display startup image
     EPD_init();
-    EPD_display_image(butterfly_image);
+    //EPD_display_image(butterfly_image);
+    EPD_display_image(current_data_image);
     EPD_deep_sleep();
 }
 
@@ -170,16 +173,7 @@ void GPIO_wakeup_startup(void) {
     peripherals_init();
 
     // Draw sensor data to image
-    //EPD_draw_sensor_data();
-
-    EPD_draw_line(200, 150, 0, 50, current_data_image);
-    EPD_draw_line(50, 0, 200, 150, current_data_image);
-    EPD_draw_line(200, 150, 350, 0, current_data_image);
-    EPD_draw_line(400, 50, 200, 150, current_data_image);
-    EPD_draw_line(200, 150, 400, 250, current_data_image);
-    EPD_draw_line(350, 300, 200, 150, current_data_image);
-    EPD_draw_line(200, 150, 50, 300, current_data_image);
-    EPD_draw_line(0, 250, 200, 150, current_data_image);
+    EPD_draw_sensor_data();
 
     // Display current sensor data
     EPD_init();
@@ -274,9 +268,25 @@ void I2C_init(void) {
         .scl_speed_hz = 100000,
     };
 
+    // AHT20 device configuration
+    i2c_device_config_t AHT20_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = AHT20_SENSOR_ADDR,
+        .scl_speed_hz = 100000,
+    };
+
+    // VEML7700 device configuration
+    i2c_device_config_t VEML7700_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = VEML7700_SENSOR_ADDR,
+        .scl_speed_hz = 100000,
+    };
+
     // Add devices to I2C bus
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg, &MCP9808_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &AHT20_cfg, &AHT20_dev_handle));
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &VEML7700_cfg, &VEML7700_dev_handle));
 }
 
 void SPI_init(void) {
@@ -292,7 +302,7 @@ void SPI_init(void) {
 
     spi_device_interface_config_t EPD_cfg = {
         .clock_speed_hz = 10000000,
-        .spics_io_num = SPI_CS_IO,
+        .spics_io_num = SPI_EPD_CS_IO,
         .queue_size = 7,
     };
 
@@ -312,17 +322,24 @@ void EPD_draw_sensor_data(void) {
     float Temp_2;
     Temp_2 = read_MCP9808_2();
 
+     // Read temp from MCP9808
+    int humidity;
+    humidity = read_AHT20();
+
     // Declare strings
     char temp_string[20];
     char temp_string_2[22];
+    char humidity_string[14];
 
     // Convert temperature value to string
     snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
     snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
+    snprintf(humidity_string, sizeof(humidity_string), "Humidity: %d%%", humidity);
 
     // Draw temperature values to display
     EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
     EPD_draw_string(0, 14, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
+    EPD_draw_string(0, 28, humidity_string, sizeof(humidity_string), FONT12_HEIGHT, current_data_image);
 
     // Print sensor values
     printf("Temperature: %.4f °C\n", Temp);
@@ -393,6 +410,27 @@ float read_MCP9808_2(void) {
     }
 
     return Temp;
+}
+
+float read_AHT20(void) {
+    // Variable declaration
+    uint32_t humidity = 0;
+    uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
+    uint8_t data[7];
+    
+    // Request and read the humidity data
+    ESP_ERROR_CHECK(i2c_master_transmit(AHT20_dev_handle, command, sizeof(command), -1));
+    ESP_ERROR_CHECK(i2c_master_receive(AHT20_dev_handle, data, sizeof(data), -1));
+        
+    // Calculate relative humididy
+    humidity |= data[1];
+    humidity = humidity << 8;
+    humidity |= data[2];
+    humidity = humidity << 4;
+    humidity |= (data[3] >> 4);
+    humidity = (humidity * 100 / 0x100000);
+
+    return humidity;
 }
 
 void EPD_busy(void) {

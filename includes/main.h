@@ -31,7 +31,8 @@
 #define SPI_MOSI_IO     7
 #define SPI_MISO_IO     2
 #define SPI_SCLK_IO     6
-#define SPI_CS_IO       10
+#define SPI_EPD_CS_IO   10
+#define SPI_SD_CS_IO    18
 #define SPI_QUADWP_IO   -1
 #define SPI_QUADHD_IO   -1
 
@@ -55,11 +56,19 @@
 
 #define MCP9808_SENSOR_ADDR         0x18
 #define MCP9808_SENSOR_ADDR_2       0x1C
+#define AHT20_SENSOR_ADDR           0x38
+#define VEML7700_SENSOR_ADDR        0x10
+
 #define MCP9808_MEASURE_TEMPERATURE 0x05
+#define AHT20_MEADURE_HUMIDITY      0xAC
+#define AHT20_MEADURE_HUMIDITY_P1      0x33
+#define AHT20_MEADURE_HUMIDITY_P2      0x00
 
 // Global variables
 i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
+i2c_master_dev_handle_t AHT20_dev_handle;
+i2c_master_dev_handle_t VEML7700_dev_handle;
 spi_device_handle_t EPD_dev_handle;
 
 // Function declerations
@@ -88,6 +97,7 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
 void EPD_draw_sensor_data(void);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
+float read_AHT20(void);
 
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
