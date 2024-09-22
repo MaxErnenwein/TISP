@@ -326,24 +326,44 @@ void EPD_draw_sensor_data(void) {
     int humidity;
     humidity = read_AHT20();
 
+    int lux;
+    lux = read_VEML7700();
+
     // Declare strings
     char temp_string[20];
     char temp_string_2[22];
-    char humidity_string[14];
+    int humididy_string_size;
+    int lux_string_size;
+    if (humidity < 10) {
+        humididy_string_size = 13;
+    } else {
+        humididy_string_size = 14;
+    }
+    char humidity_string[humididy_string_size];
+    if (lux < 10) {
+        lux_string_size = 19;
+    } else  if (lux < 100) {
+        lux_string_size = 20;
+    } else  if (lux < 1000) {
+        lux_string_size = 21;
+    } else if (lux < 10000) {
+        lux_string_size = 22;
+    } else {
+        lux_string_size = 23;
+    }
+    char lux_string[lux_string_size];    
 
     // Convert temperature value to string
     snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
     snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
     snprintf(humidity_string, sizeof(humidity_string), "Humidity: %d%%", humidity);
+    snprintf(lux_string, sizeof(lux_string), "Light level: %d lux", lux);
 
     // Draw temperature values to display
     EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
     EPD_draw_string(0, 14, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
     EPD_draw_string(0, 28, humidity_string, sizeof(humidity_string), FONT12_HEIGHT, current_data_image);
-
-    // Print sensor values
-    printf("Temperature: %.4f °C\n", Temp);
-    printf("Temperature_2: %.4f °C\n", Temp_2);
+    EPD_draw_string(0, 42, lux_string, sizeof(lux_string), FONT12_HEIGHT, current_data_image);
 }
 
 void EPD_send_byte(const uint8_t byte, bool dc) {
@@ -412,7 +432,7 @@ float read_MCP9808_2(void) {
     return Temp;
 }
 
-float read_AHT20(void) {
+int read_AHT20(void) {
     // Variable declaration
     uint32_t humidity = 0;
     uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
@@ -433,11 +453,38 @@ float read_AHT20(void) {
     return humidity;
 }
 
+int read_VEML7700(void) {
+    // Variable declaration
+    uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
+    uint8_t command[1] = {VEML7700_MEASURE_LIGHT};
+    uint8_t data[2];
+    int lux;
+
+    // Set VEML7700 to gain of 1 and integration time of 100ms
+    ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
+
+    // Read light level
+    i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1);
+
+    // Combine the two bytes into a 16-bit value
+    lux = (data[1] << 8) | data[0];
+
+    // Convert to lux
+    lux *= 0.0672;
+    if (lux > 1000) {
+        float a = 6.0135E-13;
+        float b = -9.3924E-9;
+        float c = 8.1488E-5;
+        float d = 1.0023;
+        lux = (int)(pow(lux, 4) * a + pow(lux, 3) * b + pow(lux, 2) * c + lux * d);
+    }
+
+    return lux;
+}
+
 void EPD_busy(void) {
-    printf("EPD Busy\n");
     // Wait until the EPD is not busy
     while(gpio_get_level(EPD_BUSY_PIN) == 1);
-    printf("EPD Not Busy\n");
 }
 
 void EPD_reset(void) {

@@ -12,6 +12,7 @@
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
 #include <string.h>
+#include <math.h>
 
 // Defines
 #define GPIO_PIN_RESET  0
@@ -61,8 +62,12 @@
 
 #define MCP9808_MEASURE_TEMPERATURE 0x05
 #define AHT20_MEADURE_HUMIDITY      0xAC
-#define AHT20_MEADURE_HUMIDITY_P1      0x33
-#define AHT20_MEADURE_HUMIDITY_P2      0x00
+#define AHT20_MEADURE_HUMIDITY_P1   0x33
+#define AHT20_MEADURE_HUMIDITY_P2   0x00
+#define VEML7700_MEASURE_LIGHT      0x04
+#define VEML7700_CONFIG             0x00
+#define VEML7700_CONFIG_P1          0x00
+#define VEML7700_CONFIG_P2          0x00
 
 // Global variables
 i2c_master_dev_handle_t MCP9808_dev_handle;
@@ -97,7 +102,8 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
 void EPD_draw_sensor_data(void);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
-float read_AHT20(void);
+int read_AHT20(void);
+int read_VEML7700(void);
 
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
