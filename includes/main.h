@@ -11,6 +11,9 @@
 #include "hal/spi_types.h"
 #include "driver/spi_common.h"
 #include "driver/spi_master.h"
+#include "driver/sdspi_host.h"
+#include "sdmmc_cmd.h"
+#include "esp_vfs_fat.h"
 #include <string.h>
 #include <math.h>
 

@@ -112,8 +112,6 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
     int greater; // The larger change from start to end
     int lesser; // The smaller change from start to end
     float ratio; // The ratio of smaller/larger change
-    int main_direction; // Larger change start position
-    int secondary_direction; // Smaller change start position
     int direction = abs((int)X_diff) >= abs((int)Y_diff); // Determine what direction is the main (larger) one
 
     // Set variables depending on the main direction
@@ -121,14 +119,10 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
         greater = X_diff;
         lesser = Y_diff;
         ratio = Y_diff / X_diff;
-        main_direction = X_start;
-        secondary_direction = Y_start;
     } else {
         greater = Y_diff;
         lesser = X_diff;
         ratio = X_diff / Y_diff;
-        main_direction = Y_start;
-        secondary_direction = X_start;
     }
 
     // Find the sign for the direction of change
@@ -144,9 +138,9 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
     for (int i = 0; i < abs((int)greater) + 1; i++) {
         // Depending on if x is the main or secondary direction, switch function
         if (direction) {
-            EPD_draw_pixel(main_direction + (i * main_sign), secondary_direction + (int)(i * ratio * secondary_sign), image);
+            EPD_draw_pixel(X_start + (i * main_sign), Y_start + (int)(i * ratio * secondary_sign), image);
         } else {
-            EPD_draw_pixel(secondary_direction + (int)(i * ratio * secondary_sign), main_direction + (i * main_sign), image);
+            EPD_draw_pixel(X_start + (int)(i * ratio * secondary_sign), Y_start + (i * main_sign), image);
         }
     }
 }
@@ -173,7 +167,16 @@ void GPIO_wakeup_startup(void) {
     peripherals_init();
 
     // Draw sensor data to image
-    EPD_draw_sensor_data();
+    //EPD_draw_sensor_data();
+    EPD_draw_line(50, 0, 200, 150, current_data_image);
+    EPD_draw_line(400, 50, 200, 150, current_data_image);
+    EPD_draw_line(350, 300, 200, 150, current_data_image);
+    EPD_draw_line(0, 250, 200, 150, current_data_image);
+
+    EPD_draw_line(200, 150, 0, 50, current_data_image);
+    EPD_draw_line(200, 150, 350, 0, current_data_image);
+    EPD_draw_line(200, 150, 400, 250, current_data_image);
+    EPD_draw_line(200, 150, 50, 300, current_data_image);
 
     // Display current sensor data
     EPD_init();
