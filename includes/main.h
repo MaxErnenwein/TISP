@@ -17,6 +17,9 @@
 #include <string.h>
 #include <math.h>
 
+#include <sys/unistd.h>
+#include <sys/stat.h>
+
 // Defines
 #define GPIO_PIN_RESET  0
 #define GPIO_PIN_SET    1

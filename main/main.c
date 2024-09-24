@@ -149,26 +149,30 @@ void initial_startup(void) {
     printf("Initial Startup\n");
 
     // Configure peripherals
-    peripherals_init();
+    GPIO_init();
+    I2C_init();
+    SPI_init();
 
-    EPD_draw_sensor_data();
+    //EPD_draw_sensor_data();
 
     // Display startup image
-    EPD_init();
+    //EPD_init();
     //EPD_display_image(butterfly_image);
-    EPD_display_image(current_data_image);
-    EPD_deep_sleep();
+    //EPD_display_image(current_data_image);
+    //EPD_deep_sleep();
 }
 
 void GPIO_wakeup_startup(void) {
     printf("GPIO Wakeup\n");
 
     // Configure peripherals
-    peripherals_init();
+    GPIO_init();
+    I2C_init();
+    SPI_init();
 
     // Draw sensor data to image
-    //EPD_draw_sensor_data();
-    EPD_draw_line(50, 0, 200, 150, current_data_image);
+    EPD_draw_sensor_data();
+    /*EPD_draw_line(50, 0, 200, 150, current_data_image);
     EPD_draw_line(400, 50, 200, 150, current_data_image);
     EPD_draw_line(350, 300, 200, 150, current_data_image);
     EPD_draw_line(0, 250, 200, 150, current_data_image);
@@ -176,7 +180,7 @@ void GPIO_wakeup_startup(void) {
     EPD_draw_line(200, 150, 0, 50, current_data_image);
     EPD_draw_line(200, 150, 350, 0, current_data_image);
     EPD_draw_line(200, 150, 400, 250, current_data_image);
-    EPD_draw_line(200, 150, 50, 300, current_data_image);
+    EPD_draw_line(200, 150, 50, 300, current_data_image);*/
 
     // Display current sensor data
     EPD_init();
@@ -188,17 +192,8 @@ void timer_wakeup_startup(void) {
     printf("Timer Wakeup\n");
 
     // Configure peripherals
-    peripherals_init();
-}
-
-void peripherals_init(void) {
-    // Configure GPIO
     GPIO_init();
-
-    // Initialize i2c
     I2C_init();
-
-    // Initialize SPI
     SPI_init();
 }
 
@@ -293,16 +288,32 @@ void I2C_init(void) {
 }
 
 void SPI_init(void) {
+    // Configure the file structure for the SD card
+    esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+        .max_files = 10,
+        .allocation_unit_size = 16 * 1024
+    };
 
-    const spi_bus_config_t spi_bus_config = {
+    // Declare variable for the SD card
+    sdmmc_card_t *card;
+
+    // Set mount point string
+    const char mount_point[] = "/sdcard";
+    
+    // Set SD host struct to default values
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+
+    // Configure SPI bus
+    spi_bus_config_t spi_bus_config = {
         .mosi_io_num = SPI_MOSI_IO,
         .miso_io_num = SPI_MISO_IO,
         .sclk_io_num = SPI_SCLK_IO,
         .quadwp_io_num = SPI_QUADWP_IO,
         .quadhd_io_num = SPI_QUADHD_IO,
-        .max_transfer_sz = 15000,
+        .max_transfer_sz = 4000,
     };
 
+    // Configure EPD
     spi_device_interface_config_t EPD_cfg = {
         .clock_speed_hz = 10000000,
         .spics_io_num = SPI_EPD_CS_IO,
@@ -310,10 +321,21 @@ void SPI_init(void) {
     };
 
     // Initialize the SPI bus
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &spi_bus_config, SPI_DMA_DISABLED));
+    ESP_ERROR_CHECK(spi_bus_initialize(host.slot, &spi_bus_config, SDSPI_DEFAULT_DMA));
 
     // Add device to SPI bus
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &EPD_cfg, &EPD_dev_handle));
+    ESP_ERROR_CHECK(spi_bus_add_device(host.slot, &EPD_cfg, &EPD_dev_handle));
+
+    // Configure the SD card slot
+    sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
+    slot_config.gpio_cs = SPI_SD_CS_IO;
+    slot_config.host_id = host.slot;
+
+    // Mount the SD card
+    ESP_ERROR_CHECK(esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card));
+
+    // Print SD card information
+    sdmmc_card_print_info(stdout, card);
 }
 
 void EPD_draw_sensor_data(void) {
