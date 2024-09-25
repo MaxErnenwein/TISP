@@ -21,8 +21,93 @@ void app_main(void)
         }
     }
 
+    // Write sensor data to SD card
+    // Read temp from MCP9808
+    float Temp;
+    Temp = read_MCP9808();
+
+    // Read temp from MCP9808
+    float Temp_2;
+    Temp_2 = read_MCP9808_2();
+
+     // Read temp from MCP9808
+    int humidity;
+    humidity = read_AHT20();
+
+    int lux;
+    lux = read_VEML7700();
+
+    // Declare strings
+    char temp_string[20];
+    char temp_string_2[22];
+    int humididy_string_size;
+    int lux_string_size;
+    if (humidity < 10) {
+        humididy_string_size = 13;
+    } else {
+        humididy_string_size = 14;
+    }
+    char humidity_string[humididy_string_size];
+    if (lux < 10) {
+        lux_string_size = 19;
+    } else  if (lux < 100) {
+        lux_string_size = 20;
+    } else  if (lux < 1000) {
+        lux_string_size = 21;
+    } else if (lux < 10000) {
+        lux_string_size = 22;
+    } else {
+        lux_string_size = 23;
+    }
+    char lux_string[lux_string_size];    
+
+    // Convert temperature value to string
+    snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
+    snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
+    snprintf(humidity_string, sizeof(humidity_string), "Humidity: %d%%", humidity);
+    snprintf(lux_string, sizeof(lux_string), "Light level: %d lux", lux);
+
+    // Allocate memory
+    char** data = malloc(4 * sizeof(char*));
+    for (int i = 0; i < 4; i++) {
+        data[i] = malloc(50 * sizeof(char));
+    }
+
+    // Create and write to a file.
+    char *file_test = "/sdcard/test.txt";
+    snprintf(data[0], sizeof(temp_string) + 1, "%s\n", temp_string);
+    snprintf(data[1], sizeof(temp_string_2) + 1, "%s\n", temp_string_2);
+    snprintf(data[2], sizeof(humidity_string) + 2, "%s%%\n", humidity_string);
+    snprintf(data[3], sizeof(lux_string) + 1, "%s\n", lux_string);
+    SD_write_file(file_test, data, 4);
+
+    // Free memory
+    for (int i = 0; i < 4; i++) {
+		free(data[i]);
+	}
+	free(data);
+
     // Enter deep sleep
     deep_sleep();
+}
+
+void SD_write_file(char* file_path, char** data, int num_lines) {
+    // Open file to be written to 
+    FILE* file = fopen(file_path, "a");
+
+    // Check for file open error
+    if (file == NULL) {
+        printf("File failed to open\n");
+        return;
+    }
+
+    // Write data to file
+    for (int i = 0; i < num_lines; i++) {
+        fprintf(file, data[i]);
+    }
+
+    // Close the file
+    fclose(file);
 }
 
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
@@ -156,10 +241,10 @@ void initial_startup(void) {
     //EPD_draw_sensor_data();
 
     // Display startup image
-    //EPD_init();
-    //EPD_display_image(butterfly_image);
+    EPD_init();
+    EPD_display_image(butterfly_image);
     //EPD_display_image(current_data_image);
-    //EPD_deep_sleep();
+    EPD_deep_sleep();
 }
 
 void GPIO_wakeup_startup(void) {

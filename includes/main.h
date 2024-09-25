@@ -106,6 +106,8 @@ void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_si
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image);
 void EPD_draw_sensor_data(void);
+void SD_write_file(char* file_path, char** data, int num_lines);
+void SD_read_file(char* file_path, char** data, int num_lines);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
 int read_AHT20(void);
