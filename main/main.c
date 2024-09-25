@@ -87,6 +87,26 @@ void app_main(void)
 	}
 	free(data);
 
+    // Read data from file
+    // Allocate memory
+    char** data_2 = malloc(4 * sizeof(char*));
+    for (int i = 0; i < 4; i++) {
+        data_2[i] = malloc(50 * sizeof(char));
+    }
+
+    // Read data from file
+    SD_read_file(file_test, data_2, 4);
+
+    for (int i = 0; i < 4; i++) {
+        printf("Read data_2[%d] = %s\n", i, data_2[i]);
+    }
+
+    // Free memory
+    for (int i = 0; i < 4; i++) {
+		free(data_2[i]);
+	}
+	free(data_2);
+
     // Enter deep sleep
     deep_sleep();
 }
@@ -106,6 +126,33 @@ void SD_write_file(char* file_path, char** data, int num_lines) {
         fprintf(file, data[i]);
     }
 
+    // Close the file
+    fclose(file);
+}
+
+void SD_read_file(char* file_path, char** data, int num_lines) {
+    // Open the file to be read
+    FILE* file = fopen(file_path, "r");
+
+    // Check for file open error
+    if (file == NULL) {
+        printf("File failed to open\n");
+        return;
+    }
+
+    printf("strlen(data[i]) = %d\n", strlen(data[0]));
+
+    // Read lines from file
+    for (int i = 0; i < num_lines; i++) {
+        fgets(data[i], strlen(data[i]), file);
+        char *pos = strchr(data[i], '\n');
+        if (pos) {
+            *pos = '\0';
+        }
+    }
+
+    
+    
     // Close the file
     fclose(file);
 }
