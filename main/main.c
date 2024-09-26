@@ -21,99 +21,32 @@ void app_main(void)
         }
     }
 
-    // Write sensor data to SD card
-    // Read temp from MCP9808
-    float Temp;
-    Temp = read_MCP9808();
+    // Get sensor values
+    struct sensor_readings data = {
+        .temperature = read_MCP9808(),
+        .humidity = read_AHT20(),
+        .light = read_VEML7700(),
+        .time = time(NULL)
+    };
 
-    // Read temp from MCP9808
-    float Temp_2;
-    Temp_2 = read_MCP9808_2();
+    // Create or write to file
+    char *file_test = "/sdcard/TISPdata.bin";
+    SD_write_file(file_test, data);
 
-     // Read temp from MCP9808
-    int humidity;
-    humidity = read_AHT20();
-
-    int lux;
-    lux = read_VEML7700();
-
-    // Declare strings
-    char temp_string[20];
-    char temp_string_2[22];
-    int humididy_string_size;
-    int lux_string_size;
-    if (humidity < 10) {
-        humididy_string_size = 13;
-    } else {
-        humididy_string_size = 14;
-    }
-    char humidity_string[humididy_string_size];
-    if (lux < 10) {
-        lux_string_size = 19;
-    } else  if (lux < 100) {
-        lux_string_size = 20;
-    } else  if (lux < 1000) {
-        lux_string_size = 21;
-    } else if (lux < 10000) {
-        lux_string_size = 22;
-    } else {
-        lux_string_size = 23;
-    }
-    char lux_string[lux_string_size];    
-
-    // Convert temperature value to string
-    snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
-    snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
-    snprintf(humidity_string, sizeof(humidity_string), "Humidity: %d%%", humidity);
-    snprintf(lux_string, sizeof(lux_string), "Light level: %d lux", lux);
-
-    // Allocate memory
-    char** data = malloc(4 * sizeof(char*));
-    for (int i = 0; i < 4; i++) {
-        data[i] = malloc(50 * sizeof(char));
-    }
-
-    // Create and write to a file.
-    char *file_test = "/sdcard/test.txt";
-    snprintf(data[0], sizeof(temp_string) + 1, "%s\n", temp_string);
-    snprintf(data[1], sizeof(temp_string_2) + 1, "%s\n", temp_string_2);
-    snprintf(data[2], sizeof(humidity_string) + 2, "%s%%\n", humidity_string);
-    snprintf(data[3], sizeof(lux_string) + 1, "%s\n", lux_string);
-    SD_write_file(file_test, data, 4);
-
-    // Free memory
-    for (int i = 0; i < 4; i++) {
-		free(data[i]);
-	}
-	free(data);
-
-    // Read data from file
-    // Allocate memory
-    char** data_2 = malloc(4 * sizeof(char*));
-    for (int i = 0; i < 4; i++) {
-        data_2[i] = malloc(50 * sizeof(char));
-    }
-
-    // Read data from file
-    SD_read_file(file_test, data_2, 4);
-
-    for (int i = 0; i < 4; i++) {
-        printf("Read data_2[%d] = %s\n", i, data_2[i]);
-    }
-
-    // Free memory
-    for (int i = 0; i < 4; i++) {
-		free(data_2[i]);
-	}
-	free(data_2);
+    struct sensor_readings read_data = SD_read_file(file_test, 0);
+    printf("SENSOR READINGS FROM SD CARD:\n");
+    printf("Temperature: %f\n", read_data.temperature);
+    printf("Humidity: %hu\n", read_data.humidity);
+    printf("Light: %hu\n", read_data.light);
+    printf("Time: %ld\n", read_data.time);
 
     // Enter deep sleep
     deep_sleep();
 }
 
-void SD_write_file(char* file_path, char** data, int num_lines) {
+void SD_write_file(char* file_path, struct sensor_readings data) {
     // Open file to be written to 
-    FILE* file = fopen(file_path, "a");
+    FILE* file = fopen(file_path, "ab");
 
     // Check for file open error
     if (file == NULL) {
@@ -122,39 +55,50 @@ void SD_write_file(char* file_path, char** data, int num_lines) {
     }
 
     // Write data to file
-    for (int i = 0; i < num_lines; i++) {
-        fprintf(file, data[i]);
+    int written = fwrite(&data, sizeof(data), 1, file);
+
+    // Check if data was written
+    if (written != 1) {
+        printf("Error writing to file");
     }
 
     // Close the file
     fclose(file);
 }
 
-void SD_read_file(char* file_path, char** data, int num_lines) {
+struct sensor_readings SD_read_file(char* file_path, int index) {
     // Open the file to be read
-    FILE* file = fopen(file_path, "r");
+    FILE* file = fopen(file_path, "rb");
+
+    struct sensor_readings data = {0};
 
     // Check for file open error
     if (file == NULL) {
         printf("File failed to open\n");
-        return;
+        return data;
     }
 
-    printf("strlen(data[i]) = %d\n", strlen(data[0]));
-
-    // Read lines from file
-    for (int i = 0; i < num_lines; i++) {
-        fgets(data[i], strlen(data[i]), file);
-        char *pos = strchr(data[i], '\n');
-        if (pos) {
-            *pos = '\0';
-        }
-    }
-
+    // Get the offset of data requested
+    long file_offset = (long)(index * sizeof(struct sensor_readings));
     
+    // Seek to requested data
+    int seek = fseek(file, file_offset, SEEK_SET);
+    if (seek != 0) {
+        printf("Failed to seek file");
+        fclose(file);
+        return data;
+    }
+
+    // Read data from file
+    int read = fread(&data, sizeof(struct sensor_readings), 1, file);
+    if (read != 1) {
+        printf("Failed to read file");
+    }
     
     // Close the file
     fclose(file);
+
+    return data;
 }
 
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
