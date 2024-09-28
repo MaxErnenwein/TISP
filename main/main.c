@@ -659,14 +659,18 @@ void EPD_busy(void) {
 }
 
 void EPD_reset(void) {
+    // Set reset pin high
+    gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
+    // Delay 100us
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     // Set reset pin low
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
-    // Delay 200us
+    // Delay 2us
     vTaskDelay(2 / portTICK_PERIOD_MS);
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
-    // Delay 200us
-    vTaskDelay(2 / portTICK_PERIOD_MS);
+    // Delay 100us
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     // Wait for display
     EPD_busy(); 
 }
@@ -712,6 +716,7 @@ void EPD_set_cursor(uint16_t X_start, uint16_t Y_start) {
 void EPD_init(void) {
     // Reset the display
     EPD_reset();
+    //EPD_reset();
 
     // Configure update mode
     EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_1, COMMAND);
