@@ -25,7 +25,7 @@ void app_main(void)
     deep_sleep();
 }
 
-void EPD_draw_graph(int variable, int delta_time, char* file_path) {
+void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image) {
     // Open the data in SD card
     FILE* file = fopen(file_path, "rb");
 
@@ -37,10 +37,14 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path) {
 
     struct sensor_readings data = {0};
     struct sensor_readings empty_struct = {0};
-    int graph_data[NUM_DATA_POINTS];
-    int largest = INT_MIN;
-    int smallest = INT_MAX;
+    int graph_data_int[NUM_DATA_POINTS];
+    int largest_int = INT_MIN;
+    int smallest_int = INT_MAX;
+    float graph_data_flt[NUM_DATA_POINTS];
+    float largest_flt = INT_MIN;
+    float smallest_flt = INT_MAX;
     int points_cnt = 76;
+
 
     // Go to last data measurement
     fseek(file, -1 * (sizeof(struct sensor_readings)), SEEK_END);
@@ -59,24 +63,32 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path) {
         // Put desired data in array
         switch (variable) {
             case 0: 
-                graph_data[i] = data.temperature;
+                graph_data_flt[i] = data.temperature;
                 break;
             case 1: 
-                graph_data[i] = data.humidity;
+                graph_data_int[i] = data.humidity;
                 break;
             case 2: 
-                graph_data[i] = data.light;
+                graph_data_int[i] = data.light;
                 break;
             default: 
-                graph_data[i] = 0;
+                return;
                 break;
         }
 
         // Find the largest and smallest values in the data
-        if (graph_data[i] > largest) {
-            largest = graph_data[i];
-        } else if (graph_data[i] < smallest) {
-            smallest = graph_data[i];
+        if (variable < 1) {
+            if (graph_data_flt[i] > largest_flt) {
+                largest_flt = graph_data_flt[i];
+            } else if (graph_data_flt[i] < smallest_flt) {
+                smallest_flt = graph_data_flt[i];
+            }
+        } else {
+            if (graph_data_int[i] > largest_int) {
+                largest_int = graph_data_int[i];
+            } else if (graph_data_int[i] < smallest_int) {
+                smallest_int = graph_data_int[i];
+            }
         }
 
         // Go to previous data in file
@@ -84,20 +96,32 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path) {
     }
 
     // Find the change of one pixel in the y direction
-    float delta_y_pixel = ((float)(largest - smallest))/GRAPH_Y_PIXELS;
+    float delta_y_pixel;
+    if (variable < 1) {
+        delta_y_pixel = ((float)(largest_flt - smallest_flt))/GRAPH_Y_PIXELS;
+    } else {
+        delta_y_pixel = ((float)(largest_int - smallest_int))/GRAPH_Y_PIXELS;
+    }
+
 
     // Draw the lines in the graph
     int X_start, X_end, Y_start, Y_end;
     for (int i = 0; i < points_cnt; i++) {
         X_start = 20 + (i * 5);
         X_end = 25 + (i * 5);
-        Y_start = (int)(((float)(largest - graph_data[i]))/delta_y_pixel);
-        Y_end = (int)(((float)(largest - graph_data[i + 1]))/delta_y_pixel);
-        EPD_draw_line(X_start, Y_start, X_end, Y_end, current_data_image);
+        if (variable < 1) {
+            Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel);
+            Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel);
+        } else {
+            Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel);
+            Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel);
+        }
+        
+        EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
     }
 
     // Display the graph
-    EPD_display_image(current_data_image);
+    EPD_display_image(image);
 }
 
 
@@ -324,7 +348,20 @@ void GPIO_wakeup_startup(void) {
 
     // Display current sensor data
     EPD_init();
-    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, current_data_image);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    EPD_clear_image(current_data_image);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_2_MINUTES, data_file, current_data_image);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    EPD_clear_image(current_data_image);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_5_MINUTES, data_file, current_data_image);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    EPD_clear_image(current_data_image);
+    EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, current_data_image);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    EPD_clear_image(current_data_image);
+    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, current_data_image);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
     EPD_deep_sleep();
 }
 
@@ -742,13 +779,24 @@ void EPD_clear(void) {
 
     // Write to screen in BW
     EPD_send_byte(EPD_CMD_WRITE_BW, COMMAND);
-    // Set each pixel to 1 (black)
+    // Set each pixel to 1
     for (int i = 0; i < Height*Width; i++) {
         EPD_send_byte(0xFF, DATA);
     }
 
     // Turn on the display
     EPD_turn_on_display();
+}
+
+void EPD_clear_image(unsigned char* image) {
+    // Calculate width and height
+    uint16_t Width = EPD_4IN2_V2_WIDTH / 8; // Divide by 8 since bytes are being sent
+    uint16_t Height = EPD_4IN2_V2_HEIGHT;
+
+    // Set each pixel to 1
+    for (int i = 0; i < Height*Width; i++) {
+        image[i] = 0xFF;
+    }
 }
 
 void EPD_display_image(unsigned char* image) {
