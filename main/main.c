@@ -21,28 +21,85 @@ void app_main(void)
         }
     }
 
-    // Get sensor values
-    struct sensor_readings data = {
-        .temperature = read_MCP9808(),
-        .humidity = read_AHT20(),
-        .light = read_VEML7700(),
-        .time = time(NULL)
-    };
-
-    // Create or write to file
-    char *file_test = "/sdcard/TISPdata.bin";
-    SD_write_file(file_test, data);
-
-    struct sensor_readings read_data = SD_read_file(file_test, 0);
-    printf("SENSOR READINGS FROM SD CARD:\n");
-    printf("Temperature: %f\n", read_data.temperature);
-    printf("Humidity: %hu\n", read_data.humidity);
-    printf("Light: %hu\n", read_data.light);
-    printf("Time: %ld\n", read_data.time);
-
     // Enter deep sleep
     deep_sleep();
 }
+
+void EPD_draw_graph(int variable, int delta_time, char* file_path) {
+    // Open the data in SD card
+    FILE* file = fopen(file_path, "rb");
+
+    // Check for file open error
+    if (file == NULL) {
+        printf("File failed to open\n");
+        return;
+    }
+
+    struct sensor_readings data = {0};
+    struct sensor_readings empty_struct = {0};
+    int graph_data[NUM_DATA_POINTS];
+    int largest = INT_MIN;
+    int smallest = INT_MAX;
+    int points_cnt = 76;
+
+    // Go to last data measurement
+    fseek(file, -1 * (sizeof(struct sensor_readings)), SEEK_END);
+
+    // Read data needed from file
+    for (int i = 0; i < points_cnt; i++) {
+        
+        // Read data from file
+        int read = fread(&data, sizeof(struct sensor_readings), 1, file);
+        if (read != 1) {
+            printf("Failed to read file data point %d\n", i);
+            data = empty_struct;
+            points_cnt--;
+        }
+
+        // Put desired data in array
+        switch (variable) {
+            case 0: 
+                graph_data[i] = data.temperature;
+                break;
+            case 1: 
+                graph_data[i] = data.humidity;
+                break;
+            case 2: 
+                graph_data[i] = data.light;
+                break;
+            default: 
+                graph_data[i] = 0;
+                break;
+        }
+
+        // Find the largest and smallest values in the data
+        if (graph_data[i] > largest) {
+            largest = graph_data[i];
+        } else if (graph_data[i] < smallest) {
+            smallest = graph_data[i];
+        }
+
+        // Go to previous data in file
+        fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
+    }
+
+    // Find the change of one pixel in the y direction
+    float delta_y_pixel = ((float)(largest - smallest))/GRAPH_Y_PIXELS;
+
+    // Draw the lines in the graph
+    int X_start, X_end, Y_start, Y_end;
+    for (int i = 0; i < points_cnt; i++) {
+        X_start = 20 + (i * 5);
+        X_end = 25 + (i * 5);
+        Y_start = (int)(((float)(largest - graph_data[i]))/delta_y_pixel);
+        Y_end = (int)(((float)(largest - graph_data[i + 1]))/delta_y_pixel);
+        EPD_draw_line(X_start, Y_start, X_end, Y_end, current_data_image);
+    }
+
+    // Display the graph
+    EPD_display_image(current_data_image);
+}
+
 
 void SD_write_file(char* file_path, struct sensor_readings data) {
     // Open file to be written to 
@@ -101,10 +158,24 @@ struct sensor_readings SD_read_file(char* file_path, int index) {
     return data;
 }
 
+void SD_store_sensor_data(void) {
+    // Get sensor values
+    struct sensor_readings data = {
+        .temperature = read_MCP9808(),
+        .humidity = read_AHT20(),
+        .light = read_VEML7700(),
+        .time = time(NULL)
+    };
+
+    // Create or write to file
+    char *data_file = FILE_LOCATION;
+    SD_write_file(data_file, data);
+}
+
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
     // Check to see if pixel is on screen
     if (x > EPD_4IN2_V2_WIDTH || y > EPD_4IN2_V2_HEIGHT) {
-        printf("pixel out of screen range\n");
+        //printf("pixel out of screen range\n");
         return;
     }
     // Get byte number in image
@@ -234,7 +305,6 @@ void initial_startup(void) {
     // Display startup image
     EPD_init();
     EPD_display_image(butterfly_image);
-    //EPD_display_image(current_data_image);
     EPD_deep_sleep();
 }
 
@@ -246,21 +316,15 @@ void GPIO_wakeup_startup(void) {
     I2C_init();
     SPI_init();
 
-    // Draw sensor data to image
-    EPD_draw_sensor_data();
-    /*EPD_draw_line(50, 0, 200, 150, current_data_image);
-    EPD_draw_line(400, 50, 200, 150, current_data_image);
-    EPD_draw_line(350, 300, 200, 150, current_data_image);
-    EPD_draw_line(0, 250, 200, 150, current_data_image);
+    // Store current sensor data
+    SD_store_sensor_data();
 
-    EPD_draw_line(200, 150, 0, 50, current_data_image);
-    EPD_draw_line(200, 150, 350, 0, current_data_image);
-    EPD_draw_line(200, 150, 400, 250, current_data_image);
-    EPD_draw_line(200, 150, 50, 300, current_data_image);*/
+    // Draw graph
+    char *data_file = FILE_LOCATION;
 
     // Display current sensor data
     EPD_init();
-    EPD_display_image(current_data_image);
+    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file);
     EPD_deep_sleep();
 }
 
@@ -271,6 +335,12 @@ void timer_wakeup_startup(void) {
     GPIO_init();
     I2C_init();
     SPI_init();
+
+    // Store current sensor data
+    SD_store_sensor_data();
+
+    EPD_init();
+    EPD_deep_sleep();
 }
 
 void deep_sleep(void) {
@@ -411,7 +481,7 @@ void SPI_init(void) {
     ESP_ERROR_CHECK(esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card));
 
     // Print SD card information
-    sdmmc_card_print_info(stdout, card);
+    //sdmmc_card_print_info(stdout, card);
 }
 
 void EPD_draw_sensor_data(void) {
@@ -433,14 +503,14 @@ void EPD_draw_sensor_data(void) {
     // Declare strings
     char temp_string[20];
     char temp_string_2[22];
-    int humididy_string_size;
+    int humidity_string_size;
     int lux_string_size;
     if (humidity < 10) {
-        humididy_string_size = 13;
+        humidity_string_size = 13;
     } else {
-        humididy_string_size = 14;
+        humidity_string_size = 14;
     }
-    char humidity_string[humididy_string_size];
+    char humidity_string[humidity_string_size];
     if (lux < 10) {
         lux_string_size = 19;
     } else  if (lux < 100) {
@@ -543,7 +613,7 @@ int read_AHT20(void) {
     ESP_ERROR_CHECK(i2c_master_transmit(AHT20_dev_handle, command, sizeof(command), -1));
     ESP_ERROR_CHECK(i2c_master_receive(AHT20_dev_handle, data, sizeof(data), -1));
         
-    // Calculate relative humididy
+    // Calculate relative humidity
     humidity |= data[1];
     humidity = humidity << 8;
     humidity |= data[2];

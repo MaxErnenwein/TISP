@@ -19,10 +19,13 @@
 #include <time.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
+#include <limits.h>
+#include <float.h>
 
 // Defines
 #define GPIO_PIN_RESET  0
 #define GPIO_PIN_SET    1
+
 #define COMMAND         0
 #define DATA            1
 
@@ -75,6 +78,24 @@
 #define VEML7700_CONFIG_P1          0x00
 #define VEML7700_CONFIG_P2          0x00
 
+#define DELTA_1_MINUTES 1
+#define DELTA_2_MINUTES 2
+#define DELTA_5_MINUTES 5
+#define DELTA_10_MINUTES 10
+#define DELTA_30_MINUTES 30
+#define DELTA_60_MINUTES 60
+#define DELTA_1_HOURS DELTA_60_MINUTES
+#define DELTA_2_HOURS 120
+#define DELTA_5_HOURS 300
+#define DELTA_10_HOURS 600
+#define NUM_DATA_POINTS 80
+#define GRAPH_Y_PIXELS 280
+#define GRAPH_TEMPERATURE 0
+#define GRAPH_HUMIDITY 1
+#define GRAPH_LIGHT 2
+
+#define FILE_LOCATION "/sdcard/TISPdata.bin"
+
 // Declare sensor readings struct
 struct sensor_readings {
     float temperature;
@@ -113,6 +134,7 @@ void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image);
 void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_size, unsigned char* image);
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image);
+void EPD_draw_graph(int variable, int delta_time, char* file_path);
 void EPD_draw_sensor_data(void);
 void SD_write_file(char* file_path, struct sensor_readings data);
 struct sensor_readings SD_read_file(char* file_path, int index);
