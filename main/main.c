@@ -35,6 +35,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         return;
     }
 
+    // Declare vairables
     struct sensor_readings data = {0};
     struct sensor_readings empty_struct = {0};
     int graph_data_int[NUM_DATA_POINTS];
@@ -55,6 +56,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         // Read data from file
         int read = fread(&data, sizeof(struct sensor_readings), 1, file);
         if (read != 1) {
+            // If the data point wasn't read due to reaching beginning of file, remove point from graph
             printf("Failed to read file data point %d\n", i);
             data = empty_struct;
             points_cnt--;
@@ -91,7 +93,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
             }
         }
 
-        // Go to previous data in file
+        // Go to previous data point in file
         fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
     }
 
@@ -102,13 +104,15 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     } else {
         delta_y_pixel = ((float)(largest_int - smallest_int))/GRAPH_Y_PIXELS;
     }
-
+ 
 
     // Draw the lines in the graph
     int X_start, X_end, Y_start, Y_end;
     for (int i = 0; i < points_cnt - 1; i++) {
-        X_start = GRAPH_X_OFFSET + (i * 5);
-        X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * 5);
+        // Calculate x direction
+        X_start = GRAPH_X_OFFSET + (i * GRAPH_X_DELTA);
+        X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * GRAPH_X_DELTA);
+        // Depending on what type the data is, calculate the y direction
         if (variable < 1) {
             Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
             Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
@@ -116,68 +120,85 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
             Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
             Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
         }
-        
+        // Draw the graph lines
         EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
     }
 
     // Draw Axes
     // Y-Axis
-    EPD_draw_line(35, 280, 35, 10, image);
+    EPD_draw_line(GRAPH_X_OFFSET, GRAPH_Y_LIMIT, GRAPH_X_OFFSET, GRAPH_Y_OFFSET, image);
     // X-Axis
-    EPD_draw_line(35, 280, 360, 280, image);
+    EPD_draw_line(GRAPH_X_OFFSET, GRAPH_Y_LIMIT, 360, GRAPH_Y_LIMIT, image);
     // Axes Labels
     char xvar[5] = "Time";
     EPD_draw_string(365, 275, xvar, sizeof(xvar), 12, image);
     // Y Hatch Marks
+    // Declare variables
     float ratio;
     float flt_value;
     int16_t int_value;
     int var_offset = 0;
     switch (variable) {
         case 0:
+            // Label Y-Axis
             char temp_string[16] = "Temperature (C)";
             EPD_draw_string(0, 0, temp_string, sizeof(temp_string), 12, image);
+            // Label hatch marks
             char temp_value[5];
             ratio = (largest_flt - smallest_flt) / GRAPH_Y_PIXELS;
             for (int i = 0; i < 11; i++) {
-                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
-                flt_value = largest_flt - (((i * 27) + 10) * ratio);
+                // Draw hatch mark
+                EPD_draw_line(GRAPH_X_OFFSET - 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, image);
+                // Calculate the value for the hatch mark
+                flt_value = largest_flt - (((i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_HATCH_DELTA) * ratio);
+                // Get rid of charachters in string for smaller numbers
                 if (flt_value < 10) {
                     var_offset +=1;
                 }
                 if (flt_value < 0) {
                     flt_value = 0;
                 }
+                // Draw label for hatch mark
                 snprintf(temp_value, sizeof(temp_value) - var_offset, "%.1f", flt_value);
-                EPD_draw_string(0, (i * 27) + 10, temp_value, sizeof(temp_value) - var_offset, 12, image);
+                EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, 12, image);
                 var_offset = 0;
             }
             break;
         case 1:
+            // Label Y-Axis
             char humidity_string[9] = "Humidity";
             EPD_draw_string(0, 0, humidity_string, sizeof(humidity_string), 12, image);
+            // Label hatch marks
             char humidity_value[4];
             ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
-            for (int i = 0; i < 11; i++) {
-                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
-                int_value = largest_int - (int)((float)((i * 27) + 10) * ratio);
+            for (int i = 0; i < GRAPH_Y_NUM_HATCH; i++) {
+                // Draw hatch mark
+                EPD_draw_line(GRAPH_X_OFFSET - 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, image);
+                int_value = largest_int - (int)((float)((i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET) * ratio);
+                // Make sure humidity value is between 0 and 99
                 if (int_value >= 0 && int_value <= 99) {
+                    // Draw label for hatch mark
                     snprintf(humidity_value, sizeof(humidity_value), "%2d%%", int_value);
-                    EPD_draw_string(0, (i * 27) + 10, humidity_value, sizeof(humidity_value), 12, image);
+                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, humidity_value, sizeof(humidity_value), 12, image);
                 }
             }
             break;
         case 2:
+            // Label Y-axis
             char light_string[12] = "Light (lux)";
             EPD_draw_string(0, 0, light_string, sizeof(light_string), 12, image);
+            // Label hatch marks
             char light_value[5];
             ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
-            for (int i = 0; i < 11; i++) {
-                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
-                int_value = largest_int - (int)((float)((i * 27) + 10) * ratio);
+            for (int i = 0; i < GRAPH_Y_NUM_HATCH; i++) {
+                // Draw hatch marks
+                EPD_draw_line(GRAPH_X_OFFSET - 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, image);
+                int_value = largest_int - (int)((float)((i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET) * ratio);
+                // Make sure light value is between 0 and 9999
                 if (int_value >= 0 && int_value <= 9999) {
+                    // Draw label for hitch mark
                     snprintf(light_value, sizeof(light_value), "%4d", int_value);
-                    EPD_draw_string(0, (i * 27) + 10, light_value, sizeof(light_value), 12, image);
+                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, light_value, sizeof(light_value), 12, image);
                 }
             }
             break;
@@ -187,13 +208,16 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     }
     
     // X Hatch Marks
+    // Declare variables
     char time_string[6];
     char time_unit;
     float time_value = 0;
     int time_span = NUM_DATA_POINTS * delta_time;
-    for (int i = 0; i < 6; i++) {
-        EPD_draw_line((i * 64) + 35, 278, (i * 64) + 35, 282, image);
+    for (int i = 0; i < GRAPH_X_NUM_HATCH; i++) {
+        // Draw hatch mark
+        EPD_draw_line((i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET, GRAPH_Y_LIMIT - 2, (i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET, GRAPH_Y_LIMIT + 2, image);
         time_value = i * (time_span / 6);
+        // Change time unit and value based off of how long ago measurement was taken
         if (time_value > 1440) {
             time_unit = 'd';
             time_value = time_value / 1440;
@@ -206,9 +230,11 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         if (time_value < 10) {
             var_offset += 1;
         }
+        // Make sure value is between 0 and 60
         if (time_value >= 0 && time_value <= 60) {
+            // Draw label for hatch mark
             snprintf(time_string, sizeof(time_string) - var_offset, "%.1f%c", time_value, time_unit);
-            EPD_draw_string((i * 64) + 35 - 8, 290, time_string, sizeof(time_string) - var_offset, 12, image);
+            EPD_draw_string((i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET - 8, 290, time_string, sizeof(time_string) - var_offset, 12, image);
         }
         var_offset = 0;
     }
@@ -219,7 +245,6 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     // Display the graph
     EPD_display_image(image);
 }
-
 
 void SD_write_file(char* file_path, struct sensor_readings data) {
     // Open file to be written to 
@@ -470,6 +495,11 @@ void GPIO_wakeup_startup(void) {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_HOURS, data_file, current_data_image);
     EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, current_data_image);
     EPD_deep_sleep();
 }
 
