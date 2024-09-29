@@ -43,7 +43,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     float graph_data_flt[NUM_DATA_POINTS];
     float largest_flt = INT_MIN;
     float smallest_flt = INT_MAX;
-    int points_cnt = 76;
+    int points_cnt = NUM_DATA_POINTS;
 
 
     // Go to last data measurement
@@ -106,19 +106,115 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
 
     // Draw the lines in the graph
     int X_start, X_end, Y_start, Y_end;
-    for (int i = 0; i < points_cnt; i++) {
-        X_start = 20 + (i * 5);
-        X_end = 25 + (i * 5);
+    for (int i = 0; i < points_cnt - 1; i++) {
+        X_start = GRAPH_X_OFFSET + (i * 5);
+        X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * 5);
         if (variable < 1) {
-            Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel);
-            Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel);
+            Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+            Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
         } else {
-            Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel);
-            Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel);
+            Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+            Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
         }
         
         EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
     }
+
+    // Draw Axes
+    // Y-Axis
+    EPD_draw_line(35, 280, 35, 10, image);
+    // X-Axis
+    EPD_draw_line(35, 280, 360, 280, image);
+    // Axes Labels
+    char xvar[5] = "Time";
+    EPD_draw_string(365, 275, xvar, sizeof(xvar), 12, image);
+    // Y Hatch Marks
+    float ratio;
+    float flt_value;
+    int16_t int_value;
+    int var_offset = 0;
+    switch (variable) {
+        case 0:
+            char temp_string[16] = "Temperature (C)";
+            EPD_draw_string(0, 0, temp_string, sizeof(temp_string), 12, image);
+            char temp_value[5];
+            ratio = (largest_flt - smallest_flt) / GRAPH_Y_PIXELS;
+            for (int i = 0; i < 11; i++) {
+                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
+                flt_value = largest_flt - (((i * 27) + 10) * ratio);
+                if (flt_value < 10) {
+                    var_offset +=1;
+                }
+                if (flt_value < 0) {
+                    flt_value = 0;
+                }
+                snprintf(temp_value, sizeof(temp_value) - var_offset, "%.1f", flt_value);
+                EPD_draw_string(0, (i * 27) + 10, temp_value, sizeof(temp_value) - var_offset, 12, image);
+                var_offset = 0;
+            }
+            break;
+        case 1:
+            char humidity_string[9] = "Humidity";
+            EPD_draw_string(0, 0, humidity_string, sizeof(humidity_string), 12, image);
+            char humidity_value[4];
+            ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
+            for (int i = 0; i < 11; i++) {
+                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
+                int_value = largest_int - (int)((float)((i * 27) + 10) * ratio);
+                if (int_value >= 0 && int_value <= 99) {
+                    snprintf(humidity_value, sizeof(humidity_value), "%2d%%", int_value);
+                    EPD_draw_string(0, (i * 27) + 10, humidity_value, sizeof(humidity_value), 12, image);
+                }
+            }
+            break;
+        case 2:
+            char light_string[12] = "Light (lux)";
+            EPD_draw_string(0, 0, light_string, sizeof(light_string), 12, image);
+            char light_value[5];
+            ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
+            for (int i = 0; i < 11; i++) {
+                EPD_draw_line(33, (i * 27) + 10, 37, (i * 27) + 10, image);
+                int_value = largest_int - (int)((float)((i * 27) + 10) * ratio);
+                if (int_value >= 0 && int_value <= 9999) {
+                    snprintf(light_value, sizeof(light_value), "%4d", int_value);
+                    EPD_draw_string(0, (i * 27) + 10, light_value, sizeof(light_value), 12, image);
+                }
+            }
+            break;
+        default:
+            return;
+            break;
+    }
+    
+    // X Hatch Marks
+    char time_string[6];
+    char time_unit;
+    float time_value = 0;
+    int time_span = NUM_DATA_POINTS * delta_time;
+    for (int i = 0; i < 6; i++) {
+        EPD_draw_line((i * 64) + 35, 278, (i * 64) + 35, 282, image);
+        time_value = i * (time_span / 6);
+        if (time_value > 1440) {
+            time_unit = 'd';
+            time_value = time_value / 1440;
+        } else if (time_value > 60) {
+            time_unit = 'h';
+            time_value = time_value / 60;
+        } else {
+            time_unit = 'm';
+        }
+        if (time_value < 10) {
+            var_offset += 1;
+        }
+        if (time_value >= 0 && time_value <= 60) {
+            snprintf(time_string, sizeof(time_string) - var_offset, "%.1f%c", time_value, time_unit);
+            EPD_draw_string((i * 64) + 35 - 8, 290, time_string, sizeof(time_string) - var_offset, 12, image);
+        }
+        var_offset = 0;
+    }
+
+    // Close the file
+    fclose(file);
 
     // Display the graph
     EPD_display_image(image);
@@ -327,9 +423,9 @@ void initial_startup(void) {
     //EPD_draw_sensor_data();
 
     // Display startup image
-    EPD_init();
-    EPD_display_image(butterfly_image);
-    EPD_deep_sleep();
+    //EPD_init();
+    //EPD_display_image(butterfly_image);
+    //EPD_deep_sleep();
 }
 
 void GPIO_wakeup_startup(void) {
@@ -341,7 +437,7 @@ void GPIO_wakeup_startup(void) {
     SPI_init();
 
     // Store current sensor data
-    SD_store_sensor_data();
+    //SD_store_sensor_data();
 
     // Draw graph
     char *data_file = FILE_LOCATION;
@@ -349,19 +445,31 @@ void GPIO_wakeup_startup(void) {
     // Display current sensor data
     EPD_init();
     EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, current_data_image);
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
     EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_2_MINUTES, data_file, current_data_image);
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
     EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_5_MINUTES, data_file, current_data_image);
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
     EPD_clear_image(current_data_image);
-    EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, current_data_image);
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_MINUTES, data_file, current_data_image);
     EPD_clear_image(current_data_image);
-    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, current_data_image);
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_30_MINUTES, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_60_MINUTES, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_2_HOURS, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_5_HOURS, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_HOURS, data_file, current_data_image);
+    EPD_clear_image(current_data_image);
     EPD_deep_sleep();
 }
 
@@ -375,9 +483,6 @@ void timer_wakeup_startup(void) {
 
     // Store current sensor data
     SD_store_sensor_data();
-
-    EPD_init();
-    EPD_deep_sleep();
 }
 
 void deep_sleep(void) {
@@ -642,7 +747,7 @@ float read_MCP9808_2(void) {
 
 int read_AHT20(void) {
     // Variable declaration
-    uint32_t humidity = 0;
+    int humidity = 0;
     uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
     uint8_t data[7];
     
