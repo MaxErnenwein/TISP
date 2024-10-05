@@ -10,18 +10,18 @@ void app_main(void)
 
     // If this is a reset and not a wakeup form deep sleep, run the initial startup
     if (reset_reason == ESP_RST_POWERON) {
-        initial_startup();
+        //initial_startup();
     } else if (reset_reason == ESP_RST_DEEPSLEEP) {
         // Get reason for wakeup form deep sleep
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            GPIO_wakeup_startup();
+            //GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            timer_wakeup_startup();
+            printf("TIMER_WAKEUP\n");
+            //timer_wakeup_startup();
         }
     }
 
-    // Enter deep sleep
     deep_sleep();
 }
 
@@ -246,13 +246,36 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     EPD_display_image(image);
 }
 
-void SD_write_file(char* file_path, struct sensor_readings data) {
+void SD_write_file(char* file_path, struct sensor_readings data2) {
+
+    printf("before file open\n");
+    FILE* file2 = fopen(file_path, "ab");
+    printf("after file open\n");
+
+    // Check for file open error
+    if (file2 == NULL) {
+        printf("File failed to open\n");
+        return;
+    }
+    printf("before write\n");
+    int written = fwrite(&data2, sizeof(data2), 1, file2);
+    printf("after write\n");
+
+    // Check if data was written
+    if (written != 1) {
+        printf("Error writing to file in SD_write_file");
+    }
+
+    // Close the file
+    fclose(file2);
+
+    /*
     // Open file to be written to 
     FILE* file = fopen(file_path, "ab");
 
     // Check for file open error
     if (file == NULL) {
-        printf("File failed to open\n");
+        printf("File failed to open in SD_write_file\n");
         return;
     }
 
@@ -261,11 +284,11 @@ void SD_write_file(char* file_path, struct sensor_readings data) {
 
     // Check if data was written
     if (written != 1) {
-        printf("Error writing to file");
+        printf("Error writing to file in SD_write_file");
     }
 
     // Close the file
-    fclose(file);
+    fclose(file);*/
 }
 
 struct sensor_readings SD_read_file(char* file_path, int index) {
@@ -304,8 +327,20 @@ struct sensor_readings SD_read_file(char* file_path, int index) {
 }
 
 void SD_store_sensor_data(void) {
+    char *file_path = FILE_LOCATION;
+    
+
+    struct sensor_readings data2 = {
+        .temperature = read_MCP9808(),
+        .humidity = read_AHT20(),
+        .light = read_VEML7700(),
+        .time = time(NULL)
+    };
+    printf("before write file\n");
+    SD_write_file(file_path, data2);
+    printf("after write file\n");
     // Get sensor values
-    struct sensor_readings data = {
+    /*struct sensor_readings data = {
         .temperature = read_MCP9808(),
         .humidity = read_AHT20(),
         .light = read_VEML7700(),
@@ -314,7 +349,7 @@ void SD_store_sensor_data(void) {
 
     // Create or write to file
     char *data_file = FILE_LOCATION;
-    SD_write_file(data_file, data);
+    SD_write_file(data_file, data);*/
 }
 
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
@@ -465,42 +500,12 @@ void GPIO_wakeup_startup(void) {
     //SD_store_sensor_data();
 
     // Draw graph
-    char *data_file = FILE_LOCATION;
+    //char *data_file = FILE_LOCATION;
 
     // Display current sensor data
-    EPD_init();
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_2_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_5_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_30_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_60_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_2_HOURS, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_5_HOURS, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_HOURS, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, current_data_image);
-    EPD_clear_image(current_data_image);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, current_data_image);
-    EPD_deep_sleep();
+    //EPD_init();
+    //EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, file_path, current_data_image);
+    //EPD_deep_sleep();
 }
 
 void timer_wakeup_startup(void) {
@@ -512,15 +517,25 @@ void timer_wakeup_startup(void) {
     SPI_init();
 
     // Store current sensor data
-    SD_store_sensor_data();
+    //SD_store_sensor_data();
 }
 
 void deep_sleep(void) {
+    // Dismount the SD card
+    esp_vfs_fat_sdcard_unmount("/sdcard", card);
+
+    // Get current time
+    struct timeval tv_now;
+    gettimeofday(&tv_now, NULL);
+    
+    // Calculate time to next minute
+    int64_t sleep_time = (60 - tv_now.tv_sec % 60) * 1000000 - tv_now.tv_usec;
+
     // Set GPIO pin 0 for wakeup
-    esp_deep_sleep_enable_gpio_wakeup(0x01, ESP_GPIO_WAKEUP_GPIO_HIGH);
+    esp_deep_sleep_enable_gpio_wakeup(0x10, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(60 * 1000000); // 60 seconds
+    esp_sleep_enable_timer_wakeup(sleep_time);
 
     printf("Entering Deep Sleep\n");
 
@@ -531,7 +546,7 @@ void deep_sleep(void) {
 void GPIO_init(void) {
     // Configure GPIO pin 0 as the inputs to wake up from deep sleep
     gpio_config_t sleep_io_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_0),
+        .pin_bit_mask = (1 << GPIO_NUM_4),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -540,7 +555,7 @@ void GPIO_init(void) {
 
     // EPD pins
     gpio_config_t epd_o_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_4) | (1 << GPIO_NUM_5) | (1 << GPIO_NUM_6) | (1 << GPIO_NUM_10),
+        .pin_bit_mask = (1 << GPIO_NUM_5) | (1 << GPIO_NUM_6) | (1 << GPIO_NUM_10) | (1 << GPIO_NUM_20),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -612,9 +627,6 @@ void SPI_init(void) {
         .allocation_unit_size = 16 * 1024
     };
 
-    // Declare variable for the SD card
-    sdmmc_card_t *card;
-
     // Set mount point string
     const char mount_point[] = "/sdcard";
     
@@ -650,7 +662,13 @@ void SPI_init(void) {
     slot_config.host_id = host.slot;
 
     // Mount the SD card
-    ESP_ERROR_CHECK(esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card));
+    esp_err_t ret;
+    ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card);
+    if (ret != ESP_OK) {
+            // Sleep to retry mounting
+            esp_sleep_enable_timer_wakeup(1); // 60 seconds
+            esp_deep_sleep_start();
+    }
 
     // Print SD card information
     //sdmmc_card_print_info(stdout, card);

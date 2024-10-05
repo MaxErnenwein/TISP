@@ -21,6 +21,11 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <float.h>
+#include "driver/rtc_io.h"
+#include <sys/time.h>
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_private/adc_share_hw_ctrl.h"
 
 // Defines
 #define GPIO_PIN_RESET  0
@@ -30,7 +35,7 @@
 #define DATA            1
 
 #define FONT8_HEIGHT    8
-#define FONT8_WIDTH     5
+#define FONT8_WIDTH     58
 #define FONT12_HEIGHT   12
 #define FONT12_WIDTH    7
 
@@ -46,7 +51,7 @@
 #define SPI_QUADWP_IO   -1
 #define SPI_QUADHD_IO   -1
 
-#define EPD_RST_PIN         4
+#define EPD_RST_PIN         20
 #define EPD_BUSY_PIN        19
 #define EPD_DC_PIN          5
 #define EPD_CS_PIN          10
@@ -119,6 +124,7 @@ i2c_master_dev_handle_t MCP9808_dev_handle_2;
 i2c_master_dev_handle_t AHT20_dev_handle;
 i2c_master_dev_handle_t VEML7700_dev_handle;
 spi_device_handle_t EPD_dev_handle;
+sdmmc_card_t *card;
 
 // Function declerations
 void initial_startup(void);
