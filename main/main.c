@@ -10,15 +10,14 @@ void app_main(void)
 
     // If this is a reset and not a wakeup form deep sleep, run the initial startup
     if (reset_reason == ESP_RST_POWERON) {
-        //initial_startup();
+        initial_startup();
     } else if (reset_reason == ESP_RST_DEEPSLEEP) {
         // Get reason for wakeup form deep sleep
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            //GPIO_wakeup_startup();
+            GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            printf("TIMER_WAKEUP\n");
-            //timer_wakeup_startup();
+            timer_wakeup_startup();
         }
     }
 
@@ -52,7 +51,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
 
     // Read data needed from file
     for (int i = 0; i < points_cnt; i++) {
-        
+
         // Read data from file
         int read = fread(&data, sizeof(struct sensor_readings), 1, file);
         if (read != 1) {
@@ -72,6 +71,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 break;
             case 2: 
                 graph_data_int[i] = data.light;
+                break;
+            case 3:
+                graph_data_int[i] = data.sound;
                 break;
             default: 
                 return;
@@ -202,6 +204,11 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 }
             }
             break;
+        case 3:
+            // Label Y-axis
+            char sound_string[12] = "Sound level";
+            EPD_draw_string(0, 0, sound_string, sizeof(sound_string), 12, image);
+            break;
         default:
             return;
             break;
@@ -246,40 +253,17 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     EPD_display_image(image);
 }
 
-void SD_write_file(char* file_path, struct sensor_readings data2) {
+void SD_write_file(char* file_path, struct sensor_readings data) {
 
-    printf("before file open\n");
-    FILE* file2 = fopen(file_path, "ab");
-    printf("after file open\n");
-
-    // Check for file open error
-    if (file2 == NULL) {
-        printf("File failed to open\n");
-        return;
-    }
-    printf("before write\n");
-    int written = fwrite(&data2, sizeof(data2), 1, file2);
-    printf("after write\n");
-
-    // Check if data was written
-    if (written != 1) {
-        printf("Error writing to file in SD_write_file");
-    }
-
-    // Close the file
-    fclose(file2);
-
-    /*
-    // Open file to be written to 
     FILE* file = fopen(file_path, "ab");
 
     // Check for file open error
     if (file == NULL) {
-        printf("File failed to open in SD_write_file\n");
+        printf("File failed to open\n");
         return;
     }
 
-    // Write data to file
+    // Write data to SD card
     int written = fwrite(&data, sizeof(data), 1, file);
 
     // Check if data was written
@@ -288,7 +272,7 @@ void SD_write_file(char* file_path, struct sensor_readings data2) {
     }
 
     // Close the file
-    fclose(file);*/
+    fclose(file);
 }
 
 struct sensor_readings SD_read_file(char* file_path, int index) {
@@ -327,29 +311,18 @@ struct sensor_readings SD_read_file(char* file_path, int index) {
 }
 
 void SD_store_sensor_data(void) {
-    char *file_path = FILE_LOCATION;
-    
-
-    struct sensor_readings data2 = {
-        .temperature = read_MCP9808(),
-        .humidity = read_AHT20(),
-        .light = read_VEML7700(),
-        .time = time(NULL)
-    };
-    printf("before write file\n");
-    SD_write_file(file_path, data2);
-    printf("after write file\n");
     // Get sensor values
-    /*struct sensor_readings data = {
+    struct sensor_readings data = {
         .temperature = read_MCP9808(),
         .humidity = read_AHT20(),
         .light = read_VEML7700(),
+        .sound = read_KY038(),
         .time = time(NULL)
     };
 
     // Create or write to file
     char *data_file = FILE_LOCATION;
-    SD_write_file(data_file, data);*/
+    SD_write_file(data_file, data);
 }
 
 void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image) {
@@ -479,13 +452,14 @@ void initial_startup(void) {
     GPIO_init();
     I2C_init();
     SPI_init();
+    ADC_init();
 
     //EPD_draw_sensor_data();
 
     // Display startup image
-    //EPD_init();
-    //EPD_display_image(butterfly_image);
-    //EPD_deep_sleep();
+    EPD_init();
+    EPD_display_image(butterfly_image);
+    EPD_deep_sleep();
 }
 
 void GPIO_wakeup_startup(void) {
@@ -495,17 +469,18 @@ void GPIO_wakeup_startup(void) {
     GPIO_init();
     I2C_init();
     SPI_init();
+    ADC_init();
 
     // Store current sensor data
-    //SD_store_sensor_data();
+    SD_store_sensor_data();
 
     // Draw graph
-    //char *data_file = FILE_LOCATION;
+    char *data_file = FILE_LOCATION;
 
     // Display current sensor data
-    //EPD_init();
-    //EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, file_path, current_data_image);
-    //EPD_deep_sleep();
+    EPD_init();
+    EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, current_data_image);
+    EPD_deep_sleep();
 }
 
 void timer_wakeup_startup(void) {
@@ -515,9 +490,10 @@ void timer_wakeup_startup(void) {
     GPIO_init();
     I2C_init();
     SPI_init();
+    ADC_init();
 
     // Store current sensor data
-    //SD_store_sensor_data();
+    SD_store_sensor_data();
 }
 
 void deep_sleep(void) {
@@ -674,6 +650,25 @@ void SPI_init(void) {
     //sdmmc_card_print_info(stdout, card);
 }
 
+void ADC_init(void) {
+    // Configure ACD channel number and mode
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = ADC_UNIT_1,
+        .ulp_mode = ADC_ULP_MODE_RISCV,
+    };
+    // Add ADC
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
+
+    // Configure ADC
+    adc_oneshot_chan_cfg_t config = {
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_0,
+    };
+
+    // Configure the channel
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHANNEL_0, &config));
+}
+
 void EPD_draw_sensor_data(void) {
     // Read temp from MCP9808
     float Temp;
@@ -769,30 +764,6 @@ float read_MCP9808(void) {
     return Temp;
 }
 
-float read_MCP9808_2(void) {
-    // Variable decleration
-    float Temp;
-    uint8_t data[2];
-    uint8_t command = MCP9808_MEASURE_TEMPERATURE;
-
-    // Request and read the temperature data
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(MCP9808_dev_handle_2, &command, sizeof(command), data, sizeof(data), -1));
-
-    // Convert to readable temperature
-    // Clear three boundary bits TA<15:13>
-    data[0] = data[0] & 0x1F;
-    // Determine the sign
-    if((data[0] & 0x10) != 0x10) {
-        // TA > 0C
-        Temp = ((data[0] * 16.0) + (data[1] / 16.0));
-    } else {
-        // TA <= 0C
-        Temp = 256 - ((data[0] * 16.0) + (data[1] / 16.0));
-    }
-
-    return Temp;
-}
-
 int read_AHT20(void) {
     // Variable declaration
     int humidity = 0;
@@ -841,6 +812,18 @@ int read_VEML7700(void) {
     }
 
     return lux;
+}
+
+int read_KY038(void) {
+    int adc_raw;
+    int average = 0;
+    // Average 10 readings
+    for (int j = 0; j < 10; j++) {
+        ESP_ERROR_CHECK(adc_oneshot_read(adc_handle, ADC_CHANNEL_0, &adc_raw));
+        average += adc_raw;
+    }
+    average /= 10;
+    return average;
 }
 
 void EPD_busy(void) {

@@ -107,6 +107,7 @@
 #define GRAPH_TEMPERATURE   0
 #define GRAPH_HUMIDITY      1
 #define GRAPH_LIGHT         2
+#define GRAPH_SOUND         3
 
 #define FILE_LOCATION "/sdcard/TISPdata.bin"
 
@@ -115,6 +116,7 @@ struct sensor_readings {
     float temperature;
     unsigned short int humidity;
     unsigned short int light;
+    uint16_t sound;
     uint32_t time;
 };
 
@@ -124,6 +126,7 @@ i2c_master_dev_handle_t MCP9808_dev_handle_2;
 i2c_master_dev_handle_t AHT20_dev_handle;
 i2c_master_dev_handle_t VEML7700_dev_handle;
 spi_device_handle_t EPD_dev_handle;
+adc_oneshot_unit_handle_t adc_handle;
 sdmmc_card_t *card;
 
 // Function declerations
@@ -134,6 +137,7 @@ void peripherals_init(void);
 void GPIO_init(void);
 void I2C_init(void);
 void SPI_init(void);
+void ADC_init(void);
 void deep_sleep(void);
 void EPD_init(void);
 void EPD_send_byte(const uint8_t byte, bool dc);
@@ -158,6 +162,7 @@ float read_MCP9808(void);
 float read_MCP9808_2(void);
 int read_AHT20(void);
 int read_VEML7700(void);
+int read_KY038(void);
 
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
