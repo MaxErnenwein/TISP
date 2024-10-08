@@ -10,14 +10,14 @@ void app_main(void)
 
     // If this is a reset and not a wakeup form deep sleep, run the initial startup
     if (reset_reason == ESP_RST_POWERON) {
-        initial_startup();
+        //initial_startup();
     } else if (reset_reason == ESP_RST_DEEPSLEEP) {
         // Get reason for wakeup form deep sleep
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            GPIO_wakeup_startup();
+            //GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            timer_wakeup_startup();
+            //timer_wakeup_startup();
         }
     }
 
@@ -254,12 +254,20 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
 }
 
 void SD_write_file(char* file_path, struct sensor_readings data) {
+    FILE* file;
+    int i;
+    for (i = 0; i < 10; i++) {
+        file = fopen(file_path, "ab");
 
-    FILE* file = fopen(file_path, "ab");
+        // Check for file open error
+        if (file == NULL) {
+            printf("File failed to open %d in SD_write_file\n", i);
+        } else {
+            break;
+        }
+    }
 
-    // Check for file open error
-    if (file == NULL) {
-        printf("File failed to open\n");
+    if (i == 10) {
         return;
     }
 
@@ -511,7 +519,7 @@ void deep_sleep(void) {
     esp_deep_sleep_enable_gpio_wakeup(0x10, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(sleep_time);
+    esp_sleep_enable_timer_wakeup(10 * 1000000);
 
     printf("Entering Deep Sleep\n");
 
@@ -834,16 +842,16 @@ void EPD_busy(void) {
 void EPD_reset(void) {
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
-    // Delay 100us
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    // Delay 100ms
+    //esp32_sleep(100 * 1000);
     // Set reset pin low
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
-    // Delay 2us
-    vTaskDelay(2 / portTICK_PERIOD_MS);
+    // Delay 2ms
+    //esp32_sleep(2 * 1000);
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
-    // Delay 100us
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    // Delay 100ms
+    //esp32_sleep(100 * 1000);
     // Wait for display
     EPD_busy(); 
 }
@@ -861,6 +869,12 @@ void EPD_deep_sleep(void) {
     // Put the display into deep sleep
     EPD_send_byte(EPD_CMD_ENTER_DEEP_SLEEP, COMMAND);
     EPD_send_byte(0x01, DATA);
+    printf("EPD_put to sleep\n");
+}
+
+void esp32_sleep(int us) {
+    esp_sleep_enable_timer_wakeup(us);
+    esp_light_sleep_start();
 }
 
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end) {

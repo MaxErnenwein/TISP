@@ -4,8 +4,6 @@
 // Includes
 #include <stdio.h>
 #include <driver/i2c_master.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_sleep.h"
 #include "driver/gpio.h"
 #include "hal/spi_types.h"
@@ -146,6 +144,7 @@ void EPD_reset(void);
 void EPD_turn_on_display(void);
 void EPD_display_image(unsigned char* image);
 void EPD_clear(void);
+void esp32_sleep(int us);
 void EPD_deep_sleep(void);
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end);
 void EPD_set_cursor(uint16_t X_start, uint16_t Y_start);
@@ -164,11 +163,15 @@ int read_AHT20(void);
 int read_VEML7700(void);
 int read_KY038(void);
 
+// RTC variable
+RTC_DATA_ATTR int wake_count = 0;
+
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
     esp_default_wake_deep_sleep();
-    static RTC_RODATA_ATTR const char fmt_str[] = "Wake From Deep Sleep\n";
-    esp_rom_printf(fmt_str);
+    static RTC_RODATA_ATTR const char fmt_str[] = "Wake From Deep Sleep: %d\n";
+    wake_count++;
+    esp_rom_printf(fmt_str, wake_count);
 }
 
 #endif  // __MAIN_H__
