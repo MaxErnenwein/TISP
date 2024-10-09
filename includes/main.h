@@ -109,6 +109,8 @@
 
 #define FILE_LOCATION "/sdcard/TISPdata.bin"
 
+#define SETTING_TEMP_C_OR_F 0
+
 // Declare sensor readings struct
 struct sensor_readings {
     float temperature;
@@ -165,6 +167,7 @@ int read_KY038(void);
 
 // RTC variable
 RTC_DATA_ATTR int wake_count = 0;
+RTC_DATA_ATTR uint32_t settings = 0;
 
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {

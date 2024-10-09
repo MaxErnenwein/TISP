@@ -10,14 +10,14 @@ void app_main(void)
 
     // If this is a reset and not a wakeup form deep sleep, run the initial startup
     if (reset_reason == ESP_RST_POWERON) {
-        //initial_startup();
+        initial_startup();
     } else if (reset_reason == ESP_RST_DEEPSLEEP) {
         // Get reason for wakeup form deep sleep
         esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
-            //GPIO_wakeup_startup();
+            GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            //timer_wakeup_startup();
+            timer_wakeup_startup();
         }
     }
 
@@ -456,6 +456,9 @@ void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t 
 void initial_startup(void) {
     printf("Initial Startup\n");
 
+    // Go to defualt settings
+    settings = 0;
+
     // Configure peripherals
     GPIO_init();
     I2C_init();
@@ -466,7 +469,7 @@ void initial_startup(void) {
 
     // Display startup image
     EPD_init();
-    EPD_display_image(butterfly_image);
+    EPD_display_image(test_image);
     EPD_deep_sleep();
 }
 
