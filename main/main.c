@@ -75,6 +75,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
             case 3:
                 graph_data_int[i] = data.sound;
                 break;
+            case 4: 
+                graph_data_int[i] = data.presence;
+                break;
             default: 
                 return;
                 break;
@@ -209,6 +212,11 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
             char sound_string[12] = "Sound level";
             EPD_draw_string(0, 0, sound_string, sizeof(sound_string), 12, image);
             break;
+        case 4: 
+            // Label Y-axis
+            char presence_string[15] = "Human presence";
+            EPD_draw_string(0, 0, presence_string, sizeof(presence_string), 12, image);
+            break;
         default:
             return;
             break;
@@ -325,6 +333,7 @@ void SD_store_sensor_data(void) {
         .humidity = read_AHT20(),
         .light = read_VEML7700(),
         .sound = read_KY038(),
+        .presence = read_C4001(),
         .time = time(NULL)
     };
 
@@ -465,6 +474,18 @@ void initial_startup(void) {
     SPI_init();
     ADC_init();
 
+    // Commands and data
+    uint8_t eChangeMode[2] = {0x02, 0x3B};
+    uint8_t readStatus = 0x00;
+    uint8_t data;
+
+    // Put the presence sensor in the correct mode
+    do {
+        ESP_ERROR_CHECK(i2c_master_transmit(C4001_dev_handle, eChangeMode, sizeof(eChangeMode), -1));
+        ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &readStatus, sizeof(readStatus), &data, sizeof(data), -1));
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    } while ((data & 0x02) >> 1 == 1);
+
     //EPD_draw_sensor_data();
 
     // Display startup image
@@ -490,7 +511,7 @@ void GPIO_wakeup_startup(void) {
 
     // Display current sensor data
     EPD_init();
-    EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, current_data_image);
+    EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, current_data_image);
     EPD_deep_sleep();
 }
 
@@ -522,7 +543,7 @@ void deep_sleep(void) {
     esp_deep_sleep_enable_gpio_wakeup(0x10, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
-    esp_sleep_enable_timer_wakeup(10 * 1000000);
+    esp_sleep_enable_timer_wakeup(sleep_time);
 
     printf("Entering Deep Sleep\n");
 
@@ -531,7 +552,7 @@ void deep_sleep(void) {
 }
 
 void GPIO_init(void) {
-    // Configure GPIO pin 0 as the inputs to wake up from deep sleep
+    // Configure GPIO pin 1 as the inputs to wake up from deep sleep
     gpio_config_t sleep_io_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_4),
         .mode = GPIO_MODE_INPUT,
@@ -600,11 +621,18 @@ void I2C_init(void) {
         .scl_speed_hz = 100000,
     };
 
+    i2c_device_config_t C4001_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = C4001_SENSOR_ADDR,
+        .scl_speed_hz = 100000,
+    };
+
     // Add devices to I2C bus
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg, &MCP9808_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &AHT20_cfg, &AHT20_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &VEML7700_cfg, &VEML7700_dev_handle));
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &C4001_cfg, &C4001_dev_handle));
 }
 
 void SPI_init(void) {
@@ -627,7 +655,7 @@ void SPI_init(void) {
         .sclk_io_num = SPI_SCLK_IO,
         .quadwp_io_num = SPI_QUADWP_IO,
         .quadhd_io_num = SPI_QUADHD_IO,
-        .max_transfer_sz = 4000,
+        .max_transfer_sz = 120000,
     };
 
     // Configure EPD
@@ -807,7 +835,7 @@ int read_VEML7700(void) {
     ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
 
     // Read light level
-    i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1);
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1));
 
     // Combine the two bytes into a 16-bit value
     lux = (data[1] << 8) | data[0];
@@ -835,6 +863,17 @@ int read_KY038(void) {
     }
     average /= 10;
     return average;
+}
+
+int read_C4001(void) {
+    uint8_t data;
+    int presence = 0;
+    uint8_t command = 0x10;
+
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &command, sizeof(command), &data, sizeof(data), -1));
+    presence = data;
+
+    return presence;
 }
 
 void EPD_busy(void) {

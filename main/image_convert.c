@@ -53,7 +53,7 @@ int main(void) {
         }
 
         // Write newline every 50 bytes
-        if ((i % 50 == 0) && (i > 0)) {
+        if ((i % 50 == 49) && (i > 0)) {
             fprintf(hex_file, "\n");
         }
 

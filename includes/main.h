@@ -71,6 +71,7 @@
 #define MCP9808_SENSOR_ADDR_2       0x1C
 #define AHT20_SENSOR_ADDR           0x38
 #define VEML7700_SENSOR_ADDR        0x10
+#define C4001_SENSOR_ADDR           0x2A
 
 #define MCP9808_MEASURE_TEMPERATURE 0x05
 #define AHT20_MEADURE_HUMIDITY      0xAC
@@ -106,6 +107,7 @@
 #define GRAPH_HUMIDITY      1
 #define GRAPH_LIGHT         2
 #define GRAPH_SOUND         3
+#define GRAPH_PRESENCE      4
 
 #define FILE_LOCATION "/sdcard/TISPdata.bin"
 
@@ -117,6 +119,7 @@ struct sensor_readings {
     unsigned short int humidity;
     unsigned short int light;
     uint16_t sound;
+    uint8_t presence;
     uint32_t time;
 };
 
@@ -125,6 +128,7 @@ i2c_master_dev_handle_t MCP9808_dev_handle;
 i2c_master_dev_handle_t MCP9808_dev_handle_2;
 i2c_master_dev_handle_t AHT20_dev_handle;
 i2c_master_dev_handle_t VEML7700_dev_handle;
+i2c_master_dev_handle_t C4001_dev_handle;
 spi_device_handle_t EPD_dev_handle;
 adc_oneshot_unit_handle_t adc_handle;
 sdmmc_card_t *card;
@@ -164,6 +168,7 @@ float read_MCP9808_2(void);
 int read_AHT20(void);
 int read_VEML7700(void);
 int read_KY038(void);
+int read_C4001(void);
 
 // RTC variable
 RTC_DATA_ATTR int wake_count = 0;
