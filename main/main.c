@@ -136,7 +136,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     EPD_draw_line(GRAPH_X_OFFSET, GRAPH_Y_LIMIT, 360, GRAPH_Y_LIMIT, image);
     // Axes Labels
     char xvar[5] = "Time";
-    EPD_draw_string(365, 275, xvar, sizeof(xvar), 12, image);
+    EPD_draw_string(365, 275, xvar, sizeof(xvar), FONT12_HEIGHT, image);
     // Y Hatch Marks
     // Declare variables
     float ratio;
@@ -147,7 +147,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         case 0:
             // Label Y-Axis
             char temp_string[16] = "Temperature (C)";
-            EPD_draw_string(0, 0, temp_string, sizeof(temp_string), 12, image);
+            EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, image);
             // Label hatch marks
             char temp_value[5];
             ratio = (largest_flt - smallest_flt) / GRAPH_Y_PIXELS;
@@ -165,14 +165,14 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 }
                 // Draw label for hatch mark
                 snprintf(temp_value, sizeof(temp_value) - var_offset, "%.1f", flt_value);
-                EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, 12, image);
+                EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, FONT12_HEIGHT, image);
                 var_offset = 0;
             }
             break;
         case 1:
             // Label Y-Axis
             char humidity_string[9] = "Humidity";
-            EPD_draw_string(0, 0, humidity_string, sizeof(humidity_string), 12, image);
+            EPD_draw_string(0, 0, humidity_string, sizeof(humidity_string), FONT12_HEIGHT, image);
             // Label hatch marks
             char humidity_value[4];
             ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
@@ -184,14 +184,14 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 if (int_value >= 0 && int_value <= 99) {
                     // Draw label for hatch mark
                     snprintf(humidity_value, sizeof(humidity_value), "%2d%%", int_value);
-                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, humidity_value, sizeof(humidity_value), 12, image);
+                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, humidity_value, sizeof(humidity_value), FONT12_HEIGHT, image);
                 }
             }
             break;
         case 2:
             // Label Y-axis
             char light_string[12] = "Light (lux)";
-            EPD_draw_string(0, 0, light_string, sizeof(light_string), 12, image);
+            EPD_draw_string(0, 0, light_string, sizeof(light_string), FONT12_HEIGHT, image);
             // Label hatch marks
             char light_value[5];
             ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
@@ -203,19 +203,19 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 if (int_value >= 0 && int_value <= 9999) {
                     // Draw label for hitch mark
                     snprintf(light_value, sizeof(light_value), "%4d", int_value);
-                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, light_value, sizeof(light_value), 12, image);
+                    EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, light_value, sizeof(light_value), FONT12_HEIGHT, image);
                 }
             }
             break;
         case 3:
             // Label Y-axis
             char sound_string[12] = "Sound level";
-            EPD_draw_string(0, 0, sound_string, sizeof(sound_string), 12, image);
+            EPD_draw_string(0, 0, sound_string, sizeof(sound_string), FONT12_HEIGHT, image);
             break;
         case 4: 
             // Label Y-axis
             char presence_string[15] = "Human presence";
-            EPD_draw_string(0, 0, presence_string, sizeof(presence_string), 12, image);
+            EPD_draw_string(0, 0, presence_string, sizeof(presence_string), FONT12_HEIGHT, image);
             break;
         default:
             return;
@@ -249,7 +249,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         if (time_value >= 0 && time_value <= 60) {
             // Draw label for hatch mark
             snprintf(time_string, sizeof(time_string) - var_offset, "%.1f%c", time_value, time_unit);
-            EPD_draw_string((i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET - 8, 290, time_string, sizeof(time_string) - var_offset, 12, image);
+            EPD_draw_string((i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET - 8, 290, time_string, sizeof(time_string) - var_offset, FONT12_HEIGHT, image);
         }
         var_offset = 0;
     }
@@ -364,10 +364,14 @@ void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_si
         case 12:
             font_width = FONT12_WIDTH;
             break;
+        case 24: 
+            font_width = FONT24_WIDTH;
+            break;
         default: 
             font_width = 0;
             break;
     }
+    uint32_t row_holder;
 
     // Loop through each byte in the font
     for (int i = 0; i < font_size; i++) {
@@ -375,17 +379,22 @@ void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_si
         for (int j = 0; j < font_width; j++) {
             // Determine what font table to use
             if(font_size == 8) {
-                // Check if pixel shoudl be drawn
+                // Check if pixel should be drawn
                 if((((Font8_Table[font_character_index + i]) >> (7 - j)) & 0x01) == 0x01) {
                     EPD_draw_pixel(x + j, y + i, image);
                 }
             } else if (font_size == 12) {
-                // Check if pixel shoudl be drawn
+                // Check if pixel should be drawn
                 if((((Font12_Table[font_character_index + i]) >> (7 - j)) & 0x01) == 0x01) {
                     EPD_draw_pixel(x + j, y + i, image);
                 }
+            } else if (font_size == 24) {
+                // Check if pixel should be drawn
+                row_holder = (Font24_Table[font_character_index + (i * 3)] << 16) + (Font24_Table[font_character_index + (i * 3) + 1] << 8) + (Font24_Table[font_character_index + (i * 3) + 2]);
+                if(((row_holder >> (23 - j)) & 0x01) == 0x01) {
+                    EPD_draw_pixel(x + j, y + i, image);
+                }
             }
-            
         }
     }
 }
@@ -404,6 +413,9 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
         case 12:
             font_width = FONT12_WIDTH;
             break;
+        case 24: 
+            font_width = FONT24_WIDTH;
+            break;
         default: 
             font_width = 0;
             break;
@@ -414,7 +426,11 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
         // Get the next character
         character = string[i];
         // Calculate index into font table
-        index = (((int)character) - 32) * font_size;
+        if (font_size <= 12) {
+            index = (((int)character) - 32) * font_size;
+        } else {
+            index = (((int)character) - 32) * font_size * 3;
+        }
         // Draw the character
         EPD_draw_char(x + i*font_width + i, y, index, font_size, image);
     }
@@ -506,6 +522,12 @@ void GPIO_wakeup_startup(void) {
     // Store current sensor data
     SD_store_sensor_data();
 
+    // Draw current data
+    EPD_init();
+    EPD_draw_sensor_data(current_data_image);
+    EPD_deep_sleep();
+
+    /*
     // Draw graph
     char *data_file = FILE_LOCATION;
 
@@ -513,6 +535,7 @@ void GPIO_wakeup_startup(void) {
     EPD_init();
     EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, current_data_image);
     EPD_deep_sleep();
+    */
 }
 
 void timer_wakeup_startup(void) {
@@ -708,57 +731,108 @@ void ADC_init(void) {
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHANNEL_0, &config));
 }
 
-void EPD_draw_sensor_data(void) {
+void EPD_draw_sensor_data(unsigned char* image) {
     // Read temp from MCP9808
-    float Temp;
-    Temp = read_MCP9808();
+    float temp;
+    temp = read_MCP9808();
 
-    // Read temp from MCP9808
-    float Temp_2;
-    Temp_2 = read_MCP9808_2();
-
-     // Read temp from MCP9808
+    // Read humidity from AHT20
     int humidity;
     humidity = read_AHT20();
 
+    // Read light level from VEML7700
     int lux;
     lux = read_VEML7700();
 
+    // Read sound from KY038
+    int sound;
+    sound = read_KY038();
+
+    // Read presence from C4001
+    int presence;
+    presence = read_C4001();
+
     // Declare strings
-    char temp_string[20];
-    char temp_string_2[22];
-    int humidity_string_size;
-    int lux_string_size;
-    if (humidity < 10) {
-        humidity_string_size = 13;
+    int temp_string_size;
+    if (temp < 10) {
+        temp_string_size = 7;
     } else {
-        humidity_string_size = 14;
+        temp_string_size = 8;
+    }
+    char temp_string[temp_string_size];
+
+    int humidity_string_size;
+    if (humidity < 10) {
+        humidity_string_size = 3;
+    } else {
+        humidity_string_size = 4;
     }
     char humidity_string[humidity_string_size];
+
+    int lux_string_size;
     if (lux < 10) {
-        lux_string_size = 19;
+        lux_string_size = 6;
     } else  if (lux < 100) {
-        lux_string_size = 20;
+        lux_string_size = 7;
     } else  if (lux < 1000) {
-        lux_string_size = 21;
+        lux_string_size = 8;
     } else if (lux < 10000) {
-        lux_string_size = 22;
+        lux_string_size = 9;
     } else {
-        lux_string_size = 23;
+        lux_string_size = 10;
     }
-    char lux_string[lux_string_size];    
+    char lux_string[lux_string_size];  
 
-    // Convert temperature value to string
-    snprintf(temp_string, sizeof(temp_string), "Temperature: %.2fC", Temp);
-    snprintf(temp_string_2, sizeof(temp_string_2), "Temperature 2: %.2fC", Temp_2);
-    snprintf(humidity_string, sizeof(humidity_string), "Humidity: %d%%", humidity);
-    snprintf(lux_string, sizeof(lux_string), "Light level: %d lux", lux);
+    int sound_string_size;
+    if (sound < 10) {
+        sound_string_size = 4;
+    } else  if (sound < 100) {
+        sound_string_size = 5;
+    } else  if (sound < 1000) {
+        sound_string_size = 6;
+    } else if (sound < 10000) {
+        sound_string_size = 7;
+    } else {
+        sound_string_size = 8;
+    }
+    char sound_string[sound_string_size];
 
-    // Draw temperature values to display
-    EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, current_data_image);
-    EPD_draw_string(0, 14, temp_string_2, sizeof(temp_string_2), FONT12_HEIGHT, current_data_image);
-    EPD_draw_string(0, 28, humidity_string, sizeof(humidity_string), FONT12_HEIGHT, current_data_image);
-    EPD_draw_string(0, 42, lux_string, sizeof(lux_string), FONT12_HEIGHT, current_data_image);
+    int presence_string_size;
+    if (presence) {
+        presence_string_size = 4;
+    } else {
+        presence_string_size = 3;
+    }
+    char presence_string[presence_string_size];
+
+    // Convert values to strings
+    snprintf(temp_string, sizeof(temp_string), "%.2f C", temp);
+    snprintf(humidity_string, sizeof(humidity_string), "%d%%", humidity);
+    snprintf(lux_string, sizeof(lux_string), "%d Lux", lux);
+    snprintf(sound_string, sizeof(sound_string), "%ddB\n", sound);
+    if(presence) {
+        snprintf(presence_string, sizeof(presence_string), "Yes");
+    } else {
+        snprintf(presence_string, sizeof(presence_string), "No");
+    }
+
+    char TISP_string_1[] = "Current Measurements";
+    char TISP_string_2[] = "TISP Systems Made By:";
+    char TISP_string_3[] = "Max Ernenwein &";
+    char TISP_string_4[] = "Noah Lambert";
+
+    // Draw values to display
+    EPD_draw_string(40, 40, temp_string, sizeof(temp_string), FONT24_HEIGHT, image);
+    EPD_draw_string(215, 40, humidity_string, sizeof(humidity_string), FONT24_HEIGHT, image);
+    EPD_draw_string(50, 140, lux_string, sizeof(lux_string), FONT24_HEIGHT, image);
+    EPD_draw_string(215, 140, sound_string, sizeof(sound_string), FONT24_HEIGHT, image);
+    EPD_draw_string(40, 240, presence_string, sizeof(presence_string), FONT24_HEIGHT, image);
+    EPD_draw_string(210, 210, TISP_string_1, sizeof(TISP_string_1), FONT12_HEIGHT, image);
+    EPD_draw_string(210, 230, TISP_string_2, sizeof(TISP_string_2), FONT12_HEIGHT, image);
+    EPD_draw_string(210, 250, TISP_string_3, sizeof(TISP_string_3), FONT12_HEIGHT, image);
+    EPD_draw_string(210, 270, TISP_string_4, sizeof(TISP_string_4), FONT12_HEIGHT, image);
+
+    EPD_display_image(image);
 }
 
 void EPD_send_byte(const uint8_t byte, bool dc) {

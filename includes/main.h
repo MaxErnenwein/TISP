@@ -33,9 +33,11 @@
 #define DATA            1
 
 #define FONT8_HEIGHT    8
-#define FONT8_WIDTH     58
+#define FONT8_WIDTH     5
 #define FONT12_HEIGHT   12
 #define FONT12_WIDTH    7
+#define FONT24_HEIGHT   24
+#define FONT24_WIDTH    17
 
 #define TEST_I2C_PORT       0
 #define I2C_MASTER_SCL_IO   3
@@ -159,7 +161,7 @@ void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_si
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image);
 void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image);
-void EPD_draw_sensor_data(void);
+void EPD_draw_sensor_data(unsigned char* image);
 void EPD_clear_image(unsigned char* image);
 void SD_write_file(char* file_path, struct sensor_readings data);
 struct sensor_readings SD_read_file(char* file_path, int index);
