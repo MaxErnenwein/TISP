@@ -113,7 +113,12 @@
 
 #define FILE_LOCATION "/sdcard/TISPdata.bin"
 
-#define SETTING_TEMP_C_OR_F 0
+#define SETTING_TEMP_C_OR_F     0
+#define SETTING_GPIO_WAKE       1
+#define SETTING_GRAPH_STATE_0   2
+#define SETTING_GRAPH_STATE_1   3
+#define SETTING_GRAPH_STATE_2   4
+#define SETTING_GRAPH_STATE_3   5
 
 // Declare sensor readings struct
 struct sensor_readings {

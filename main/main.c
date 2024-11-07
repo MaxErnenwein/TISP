@@ -17,7 +17,12 @@ void app_main(void)
         if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
             GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
-            timer_wakeup_startup();
+            // Check for previous GPIO wakeup that failed
+            if (settings &= (1 << SETTING_GPIO_WAKE) == (1 << SETTING_GPIO_WAKE)) {
+                GPIO_wakeup_startup();
+            } else {
+                timer_wakeup_startup();
+            }
         }
     }
 
@@ -273,7 +278,7 @@ void SD_write_file(char* file_path, struct sensor_readings data) {
         } else {
             break;
         }
-    }
+    } 
 
     if (i == 10) {
         return;
@@ -513,6 +518,9 @@ void initial_startup(void) {
 void GPIO_wakeup_startup(void) {
     printf("GPIO Wakeup\n");
 
+    // Signify GPIO wakeup in settings
+    settings |= (1 << SETTING_GPIO_WAKE);
+
     // Configure peripherals
     GPIO_init();
     I2C_init();
@@ -522,20 +530,52 @@ void GPIO_wakeup_startup(void) {
     // Store current sensor data
     SD_store_sensor_data();
 
-    // Draw current data
+    // Initialize the EPD
     EPD_init();
-    EPD_draw_sensor_data(current_data_image);
-    EPD_deep_sleep();
 
-    /*
-    // Draw graph
+    int graph_state = (settings >> SETTING_GRAPH_STATE_0) & 0xF;
     char *data_file = FILE_LOCATION;
 
-    // Display current sensor data
-    EPD_init();
-    EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, current_data_image);
+    switch(graph_state) {
+        // Draw current sensor data on first push
+        case 0: 
+            EPD_draw_sensor_data(current_data_image);
+            break;
+        case 1: 
+            EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        case 2: 
+            EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        case 3: 
+            EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        case 4:
+            EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        case 5:
+            EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        default:
+            break;
+    }
+
+    // Update to next graph state
+    if (graph_state < 5) {
+        // Clear graph state bits
+        settings &= ~(0xF << SETTING_GRAPH_STATE_0);
+        // Add 1 to the graph state
+        settings |= ((graph_state + 1) << SETTING_GRAPH_STATE_0);
+    } else {
+        // Clear graph state
+        settings &= ~(0xF << SETTING_GRAPH_STATE_0);
+    }
+
+    // Put the EPD to sleep
     EPD_deep_sleep();
-    */
+
+    // After successful GPIO runthrough, clear settings bit
+    settings &= ~(1 << SETTING_GPIO_WAKE);
 }
 
 void timer_wakeup_startup(void) {
