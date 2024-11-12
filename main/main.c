@@ -18,7 +18,8 @@ void app_main(void)
             GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
             // Check for previous GPIO wakeup that failed
-            if (settings &= (1 << SETTING_GPIO_WAKE) == (1 << SETTING_GPIO_WAKE)) {
+            if ((settings &= (1 << SETTING_GPIO_WAKE)) == (1 << SETTING_GPIO_WAKE)) {
+                printf("prev GPIO fail\n");
                 GPIO_wakeup_startup();
             } else {
                 timer_wakeup_startup();
@@ -49,6 +50,8 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     float largest_flt = INT_MIN;
     float smallest_flt = INT_MAX;
     int points_cnt = NUM_DATA_POINTS;
+    double sum = 0;
+    float average;
 
 
     // Go to last data measurement
@@ -88,24 +91,29 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 break;
         }
 
-        // Find the largest and smallest values in the data
+        // Find the largest value, smallest value, and average in the data
         if (variable < 1) {
             if (graph_data_flt[i] > largest_flt) {
                 largest_flt = graph_data_flt[i];
             } else if (graph_data_flt[i] < smallest_flt) {
                 smallest_flt = graph_data_flt[i];
             }
+            sum += graph_data_flt[i];
         } else {
             if (graph_data_int[i] > largest_int) {
                 largest_int = graph_data_int[i];
             } else if (graph_data_int[i] < smallest_int) {
                 smallest_int = graph_data_int[i];
             }
+            sum += graph_data_int[i];
         }
 
         // Go to previous data point in file
         fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
     }
+
+    // Calucate average
+    average = sum / NUM_DATA_POINTS;
 
     // Find the change of one pixel in the y direction
     float delta_y_pixel;
@@ -114,7 +122,6 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     } else {
         delta_y_pixel = ((float)(largest_int - smallest_int))/GRAPH_Y_PIXELS;
     }
- 
 
     // Draw the lines in the graph
     int X_start, X_end, Y_start, Y_end;
@@ -337,7 +344,7 @@ void SD_store_sensor_data(void) {
         .temperature = read_MCP9808(),
         .humidity = read_AHT20(),
         .light = read_VEML7700(),
-        .sound = read_KY038(),
+        .sound = read_SPW2430(),
         .presence = read_C4001(),
         .time = time(NULL)
     };
@@ -574,6 +581,8 @@ void GPIO_wakeup_startup(void) {
     // Put the EPD to sleep
     EPD_deep_sleep();
 
+    printf("GPIO done\n");
+
     // After successful GPIO runthrough, clear settings bit
     settings &= ~(1 << SETTING_GPIO_WAKE);
 }
@@ -753,22 +762,33 @@ void SPI_init(void) {
 }
 
 void ADC_init(void) {
-    // Configure ACD channel number and mode
-    adc_oneshot_unit_init_cfg_t init_config = {
-        .unit_id = ADC_UNIT_1,
-        .ulp_mode = ADC_ULP_MODE_RISCV,
+    // Set up the hadle configuration
+    adc_continuous_handle_cfg_t adc_handle_config = {
+        .max_store_buf_size = 1024,
+        .conv_frame_size = 100,
     };
-    // Add ADC
-    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
 
-    // Configure ADC
-    adc_oneshot_chan_cfg_t config = {
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    // Create the new handle
+    ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_handle_config, &SPW2430_dev_handle));
+
+    // Setup adc pattern
+    adc_digi_pattern_config_t adc_digi_pattern = {
         .atten = ADC_ATTEN_DB_0,
+        .channel = ADC_CHANNEL_0,
+        .unit = ADC_UNIT_1,
+        .bit_width = ADC_BITWIDTH_12,
     };
 
-    // Configure the channel
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc_handle, ADC_CHANNEL_0, &config));
+    // Setup continuous adc
+    adc_continuous_config_t adc_config = {
+        .pattern_num = 1,
+        .adc_pattern = &adc_digi_pattern,
+        .sample_freq_hz = 40000, // max = 83333
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+    };
+
+    ESP_ERROR_CHECK(adc_continuous_config(SPW2430_dev_handle, &adc_config));
 }
 
 void EPD_draw_sensor_data(unsigned char* image) {
@@ -786,7 +806,7 @@ void EPD_draw_sensor_data(unsigned char* image) {
 
     // Read sound from KY038
     int sound;
-    sound = read_KY038();
+    sound = read_SPW2430();
 
     // Read presence from C4001
     int presence;
@@ -849,7 +869,7 @@ void EPD_draw_sensor_data(unsigned char* image) {
     snprintf(temp_string, sizeof(temp_string), "%.2f C", temp);
     snprintf(humidity_string, sizeof(humidity_string), "%d%%", humidity);
     snprintf(lux_string, sizeof(lux_string), "%d Lux", lux);
-    snprintf(sound_string, sizeof(sound_string), "%ddB\n", sound);
+    snprintf(sound_string, sizeof(sound_string), "%dpp\n", sound);
     if(presence) {
         snprintf(presence_string, sizeof(presence_string), "Yes");
     } else {
@@ -967,16 +987,38 @@ int read_VEML7700(void) {
     return lux;
 }
 
-int read_KY038(void) {
-    int adc_raw;
-    int average = 0;
-    // Average 10 readings
-    for (int j = 0; j < 10; j++) {
-        ESP_ERROR_CHECK(adc_oneshot_read(adc_handle, ADC_CHANNEL_0, &adc_raw));
-        average += adc_raw;
+int read_SPW2430(void) {
+    // Start the adc
+    ESP_ERROR_CHECK(adc_continuous_start(SPW2430_dev_handle));
+
+    // Declare the buffer to hold converted values
+    uint8_t buf[100];
+    uint32_t ret_num = 0;
+    int max = INT_MIN;
+    int min = INT_MAX;
+
+    // Read the ADC
+    ESP_ERROR_CHECK(adc_continuous_read(SPW2430_dev_handle, buf, 100, &ret_num, -1));
+
+    int data;
+    for (int i = 0; i < 25; i++) {
+        data = (buf[1 + (i*4)] << 8) | buf[(i*4)];
+        //printf("adc_output %d: %d\n", i, out);
+        if (data > max) {
+            max = data;
+        }
+        if (data < min) {
+            min = data;
+        }
     }
-    average /= 10;
-    return average;
+
+    int diff = max - min;
+    printf("diff = %d\n", diff);
+
+    // Stop the adc
+    ESP_ERROR_CHECK(adc_continuous_stop(SPW2430_dev_handle));
+
+    return diff;
 }
 
 int read_C4001(void) {

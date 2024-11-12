@@ -21,9 +21,7 @@
 #include <float.h>
 #include "driver/rtc_io.h"
 #include <sys/time.h>
-#include "esp_adc/adc_oneshot.h"
-#include "esp_adc/adc_cali.h"
-#include "esp_private/adc_share_hw_ctrl.h"
+#include "esp_adc/adc_continuous.h"
 
 // Defines
 #define GPIO_PIN_RESET  0
@@ -136,8 +134,8 @@ i2c_master_dev_handle_t MCP9808_dev_handle_2;
 i2c_master_dev_handle_t AHT20_dev_handle;
 i2c_master_dev_handle_t VEML7700_dev_handle;
 i2c_master_dev_handle_t C4001_dev_handle;
+adc_continuous_handle_t SPW2430_dev_handle;
 spi_device_handle_t EPD_dev_handle;
-adc_oneshot_unit_handle_t adc_handle;
 sdmmc_card_t *card;
 
 // Function declerations
@@ -174,7 +172,7 @@ float read_MCP9808(void);
 float read_MCP9808_2(void);
 int read_AHT20(void);
 int read_VEML7700(void);
-int read_KY038(void);
+int read_SPW2430(void);
 int read_C4001(void);
 
 // RTC variable
