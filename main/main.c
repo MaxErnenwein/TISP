@@ -514,8 +514,6 @@ void initial_startup(void) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
     } while ((data & 0x02) >> 1 == 1);
 
-    //EPD_draw_sensor_data();
-
     // Display startup image
     EPD_init();
     EPD_display_image(test_image);
@@ -643,7 +641,7 @@ void GPIO_init(void) {
     gpio_config(&epd_o_conf);
     gpio_config_t epd_i_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_19),
-        .mode = GPIO_MODE_INPUT,
+        .mode = GPIO_MODE_INPUT_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
@@ -672,13 +670,6 @@ void I2C_init(void) {
         .scl_speed_hz = 100000,
     };
 
-    // MCP9808 device configuration
-    i2c_device_config_t MCP9808_cfg_2 = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = MCP9808_SENSOR_ADDR_2,
-        .scl_speed_hz = 100000,
-    };
-
     // AHT20 device configuration
     i2c_device_config_t AHT20_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -701,7 +692,6 @@ void I2C_init(void) {
 
     // Add devices to I2C bus
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg, &MCP9808_dev_handle));
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &MCP9808_cfg_2, &MCP9808_dev_handle_2));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &AHT20_cfg, &AHT20_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &VEML7700_cfg, &VEML7700_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &C4001_cfg, &C4001_dev_handle));
@@ -876,22 +866,53 @@ void EPD_draw_sensor_data(unsigned char* image) {
         snprintf(presence_string, sizeof(presence_string), "No");
     }
 
+    // Declare strings
     char TISP_string_1[] = "Current Measurements";
     char TISP_string_2[] = "TISP Systems Made By:";
     char TISP_string_3[] = "Max Ernenwein &";
     char TISP_string_4[] = "Noah Lambert";
 
+    // Get sensor status values
+    uint8_t sensor_status = (settings >> SETTING_MCP9808_STATUS) & 0x1F;
+
     // Draw values to display
-    EPD_draw_string(40, 40, temp_string, sizeof(temp_string), FONT24_HEIGHT, image);
-    EPD_draw_string(215, 40, humidity_string, sizeof(humidity_string), FONT24_HEIGHT, image);
-    EPD_draw_string(50, 140, lux_string, sizeof(lux_string), FONT24_HEIGHT, image);
-    EPD_draw_string(215, 140, sound_string, sizeof(sound_string), FONT24_HEIGHT, image);
-    EPD_draw_string(40, 240, presence_string, sizeof(presence_string), FONT24_HEIGHT, image);
+    // Temperature
+    if ((sensor_status & 0x01) == 0x01) {
+        EPD_draw_string(40, 40, "Error", 6, FONT24_HEIGHT, image);
+    } else {
+        EPD_draw_string(40, 40, temp_string, sizeof(temp_string), FONT24_HEIGHT, image);
+    }
+    // Humididy
+    if ((sensor_status & 0x02) == 0x02) {
+        EPD_draw_string(215, 40, "Error", 6, FONT24_HEIGHT, image);
+    } else {
+        EPD_draw_string(215, 40, humidity_string, sizeof(humidity_string), FONT24_HEIGHT, image);
+    }
+    // Light
+    if ((sensor_status & 0x04) == 0x04) {
+        EPD_draw_string(50, 140, "Error", 6, FONT24_HEIGHT, image);
+    } else {
+        EPD_draw_string(50, 140, lux_string, sizeof(lux_string), FONT24_HEIGHT, image);
+    }
+    // Presence
+    if ((sensor_status & 0x08) == 0x08) {
+        EPD_draw_string(40, 240, "Error", 6, FONT24_HEIGHT, image);
+    } else {
+        EPD_draw_string(40, 240, presence_string, sizeof(presence_string), FONT24_HEIGHT, image);
+    }
+    // Sound
+    if ((sensor_status & 0x10) == 0x10) {
+        EPD_draw_string(215, 140, "Error", 6, FONT24_HEIGHT, image);
+    } else {
+        EPD_draw_string(215, 140, sound_string, sizeof(sound_string), FONT24_HEIGHT, image);
+    }
+    // Test
     EPD_draw_string(210, 210, TISP_string_1, sizeof(TISP_string_1), FONT12_HEIGHT, image);
     EPD_draw_string(210, 230, TISP_string_2, sizeof(TISP_string_2), FONT12_HEIGHT, image);
     EPD_draw_string(210, 250, TISP_string_3, sizeof(TISP_string_3), FONT12_HEIGHT, image);
     EPD_draw_string(210, 270, TISP_string_4, sizeof(TISP_string_4), FONT12_HEIGHT, image);
 
+    // Draw the image
     EPD_display_image(image);
 }
 
@@ -922,6 +943,14 @@ float read_MCP9808(void) {
     // Request and read the temperature data
     ESP_ERROR_CHECK(i2c_master_transmit_receive(MCP9808_dev_handle, &command, sizeof(command), data, sizeof(data), -1));
 
+    // Chech for malfunctioning sensor
+    if (((data[0] & 0xFF) == 0xFF) && ((data[1] & 0xFF) == 0xFF)) {
+        settings |= (1 << SETTING_MCP9808_STATUS);
+        return 0;
+    } else {
+        settings &= ~(1 << SETTING_MCP9808_STATUS);
+    }
+
     // Convert to readable temperature
     // Clear three boundary bits TA<15:13>
     data[0] = data[0] & 0x1F;
@@ -942,10 +971,24 @@ int read_AHT20(void) {
     int humidity = 0;
     uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
     uint8_t data[7];
+    int error = 1;
     
     // Request and read the humidity data
     ESP_ERROR_CHECK(i2c_master_transmit(AHT20_dev_handle, command, sizeof(command), -1));
     ESP_ERROR_CHECK(i2c_master_receive(AHT20_dev_handle, data, sizeof(data), -1));
+
+    // Chech for malfunctioning sensor
+    for (int i = 0; i < 7; i++) {
+        if ((data[i] & 0xFF) != 0xFF) {
+            error = 0;
+        }
+    }
+    if (error) {
+        settings |= (1 << SETTING_ATH20_STATUS);
+        return 0;
+    } else {
+        settings &= ~(1 << SETTING_ATH20_STATUS);
+    }
         
     // Calculate relative humidity
     humidity |= data[1];
@@ -970,6 +1013,15 @@ int read_VEML7700(void) {
 
     // Read light level
     ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1));
+
+    // Chech for malfunctioning sensor
+    if (((data[0] & 0xFF) == 0xFF) && ((data[1] & 0xFF) == 0xFF)) {
+        printf("VEML7700 Error\n");
+        settings |= (1 << SETTING_VEML7700_STATUS);
+        return 0;
+    } else {
+        settings &= ~(1 << SETTING_VEML7700_STATUS);
+    }
 
     // Combine the two bytes into a 16-bit value
     lux = (data[1] << 8) | data[0];
@@ -1027,6 +1079,14 @@ int read_C4001(void) {
     uint8_t command = 0x10;
 
     ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &command, sizeof(command), &data, sizeof(data), -1));
+
+    if (data > 1) {
+        settings |= (1 << SETTING_C4001_STATUS);
+        return 0;
+    } else {
+        settings &= ~(1 << SETTING_C4001_STATUS);
+    }
+
     presence = data;
 
     return presence;

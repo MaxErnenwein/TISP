@@ -117,6 +117,11 @@
 #define SETTING_GRAPH_STATE_1   3
 #define SETTING_GRAPH_STATE_2   4
 #define SETTING_GRAPH_STATE_3   5
+#define SETTING_MCP9808_STATUS  6
+#define SETTING_ATH20_STATUS    7
+#define SETTING_VEML7700_STATUS 8
+#define SETTING_C4001_STATUS    9
+#define SETTING_SPW2430_STATUS  10
 
 // Declare sensor readings struct
 struct sensor_readings {
@@ -130,7 +135,6 @@ struct sensor_readings {
 
 // Global variables
 i2c_master_dev_handle_t MCP9808_dev_handle;
-i2c_master_dev_handle_t MCP9808_dev_handle_2;
 i2c_master_dev_handle_t AHT20_dev_handle;
 i2c_master_dev_handle_t VEML7700_dev_handle;
 i2c_master_dev_handle_t C4001_dev_handle;
