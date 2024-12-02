@@ -81,9 +81,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 break;
             case 1: 
                 if (((data.status >> 1) & 0x01) == 0x01) {
-                    graph_data_flt[i] = INT_MIN;
+                    graph_data_int[i] = INT_MIN;
                 } else {
-                    graph_data_flt[i] = data.humidity;
+                    graph_data_int[i] = data.humidity;
                 }
                 break;
             case 2: 
@@ -184,38 +184,28 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     switch (variable) {
         case 0:
             // Label Y-Axis
-            char temp_string[16] = "Temperature (C)";
+            char temp_string[] = "Temperature (C)";
             EPD_draw_string(0, 0, temp_string, sizeof(temp_string), FONT12_HEIGHT, image);
             // Label hatch marks
-            char temp_value[5];
+            char temp_value[6];
             ratio = (largest_flt - smallest_flt) / GRAPH_Y_PIXELS;
             for (int i = 0; i < 11; i++) {
                 // Draw hatch mark
                 EPD_draw_line(GRAPH_X_OFFSET - 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, GRAPH_X_OFFSET + 2, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, image);
                 // Calculate the value for the hatch mark
                 flt_value = largest_flt - (((i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_HATCH_DELTA) * ratio);
-                // Get rid of charachters in string for smaller numbers
-                if (flt_value < 10) {
-                    var_offset +=1;
-                }
-                if (flt_value < 0) {
-                    flt_value = 0;
-                }
                 // Draw label for hatch mark
-                snprintf(temp_value, sizeof(temp_value) - var_offset, "%.1f", flt_value);
+                snprintf(temp_value, sizeof(temp_value), "%.1f~", flt_value);
                 EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, FONT12_HEIGHT, image);
                 var_offset = 0;
             }
-
-            // Display Average
-            
             break;
         case 1:
             // Label Y-Axis
             char humidity_string[9] = "Humidity";
             EPD_draw_string(0, 0, humidity_string, sizeof(humidity_string), FONT12_HEIGHT, image);
             // Label hatch marks
-            char humidity_value[4];
+            char humidity_value[5];
             ratio = (float)(largest_int - smallest_int) / GRAPH_Y_PIXELS;
             for (int i = 0; i < GRAPH_Y_NUM_HATCH; i++) {
                 // Draw hatch mark
@@ -224,7 +214,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 // Make sure humidity value is between 0 and 99
                 if (int_value >= 0 && int_value <= 99) {
                     // Draw label for hatch mark
-                    snprintf(humidity_value, sizeof(humidity_value), "%2d%%", int_value);
+                    snprintf(humidity_value, sizeof(humidity_value), "%2d%%~", int_value);
                     EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, humidity_value, sizeof(humidity_value), FONT12_HEIGHT, image);
                 }
             }
@@ -466,6 +456,13 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
     for (int i = 0; i <= string_size - 2; i++) {
         // Get the next character
         character = string[i];
+
+        // Check for end of string
+        if (character == '~') {
+            printf("end of string detected with ~\n");
+            break;
+        }
+
         // Calculate index into font table
         if (font_size <= 12) {
             index = (((int)character) - 32) * font_size;
@@ -832,67 +829,21 @@ void EPD_draw_sensor_data(unsigned char* image) {
     presence = read_C4001();
 
     // Declare strings
-    int temp_string_size;
-    if (temp < 10) {
-        temp_string_size = 7;
-    } else {
-        temp_string_size = 8;
-    }
-    char temp_string[temp_string_size];
-
-    int humidity_string_size;
-    if (humidity < 10) {
-        humidity_string_size = 3;
-    } else {
-        humidity_string_size = 4;
-    }
-    char humidity_string[humidity_string_size];
-
-    int lux_string_size;
-    if (lux < 10) {
-        lux_string_size = 6;
-    } else  if (lux < 100) {
-        lux_string_size = 7;
-    } else  if (lux < 1000) {
-        lux_string_size = 8;
-    } else if (lux < 10000) {
-        lux_string_size = 9;
-    } else {
-        lux_string_size = 10;
-    }
-    char lux_string[lux_string_size];  
-
-    int sound_string_size;
-    if (sound < 10) {
-        sound_string_size = 4;
-    } else  if (sound < 100) {
-        sound_string_size = 5;
-    } else  if (sound < 1000) {
-        sound_string_size = 6;
-    } else if (sound < 10000) {
-        sound_string_size = 7;
-    } else {
-        sound_string_size = 8;
-    }
-    char sound_string[sound_string_size];
-
-    int presence_string_size;
-    if (presence) {
-        presence_string_size = 4;
-    } else {
-        presence_string_size = 3;
-    }
-    char presence_string[presence_string_size];
+    char temp_string[10];
+    char humidity_string[5];
+    char lux_string[11];  
+    char sound_string[9];
+    char presence_string[5];
 
     // Convert values to strings
-    snprintf(temp_string, sizeof(temp_string), "%.2f C", temp);
-    snprintf(humidity_string, sizeof(humidity_string), "%d%%", humidity);
-    snprintf(lux_string, sizeof(lux_string), "%d Lux", lux);
-    snprintf(sound_string, sizeof(sound_string), "%dpp\n", sound);
+    snprintf(temp_string, sizeof(temp_string), "%.2f C~", temp);
+    snprintf(humidity_string, sizeof(humidity_string), "%d%%~", humidity);
+    snprintf(lux_string, sizeof(lux_string), "%d Lux~", lux);
+    snprintf(sound_string, sizeof(sound_string), "%dpp~", sound);
     if(presence) {
-        snprintf(presence_string, sizeof(presence_string), "Yes");
+        snprintf(presence_string, sizeof(presence_string), "Yes~");
     } else {
-        snprintf(presence_string, sizeof(presence_string), "No");
+        snprintf(presence_string, sizeof(presence_string), "No~");
     }
 
     // Declare strings

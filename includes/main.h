@@ -126,7 +126,7 @@
 // Declare sensor readings struct
 struct sensor_readings {
     float temperature;
-    unsigned short int humidity;
+    float humidity;
     unsigned short int light;
     uint16_t sound;
     uint8_t presence;
