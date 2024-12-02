@@ -130,7 +130,7 @@ struct sensor_readings {
     unsigned short int light;
     uint16_t sound;
     uint8_t presence;
-    uint32_t time;
+    uint8_t status;
 };
 
 // Global variables

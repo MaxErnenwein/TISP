@@ -18,7 +18,7 @@ void app_main(void)
             GPIO_wakeup_startup();
         } else if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
             // Check for previous GPIO wakeup that failed
-            if ((settings &= (1 << SETTING_GPIO_WAKE)) == (1 << SETTING_GPIO_WAKE)) {
+            if ((settings & (1 << SETTING_GPIO_WAKE)) == (1 << SETTING_GPIO_WAKE)) {
                 printf("prev GPIO fail\n");
                 GPIO_wakeup_startup();
             } else {
@@ -52,6 +52,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     int points_cnt = NUM_DATA_POINTS;
     double sum = 0;
     float average;
+    int bad_data_points_cnt = 0;
 
 
     // Go to last data measurement
@@ -72,19 +73,35 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         // Put desired data in array
         switch (variable) {
             case 0: 
-                graph_data_flt[i] = data.temperature;
+                if (((data.status >> 0) & 0x01) == 0x01) {
+                    graph_data_flt[i] = INT_MIN;
+                } else {
+                    graph_data_flt[i] = data.temperature;
+                }
                 break;
             case 1: 
-                graph_data_int[i] = data.humidity;
+                if (((data.status >> 1) & 0x01) == 0x01) {
+                    graph_data_flt[i] = INT_MIN;
+                } else {
+                    graph_data_flt[i] = data.humidity;
+                }
                 break;
             case 2: 
-                graph_data_int[i] = data.light;
+                if (((data.status >> 2) & 0x01) == 0x01) {
+                    graph_data_int[i] = INT_MIN;
+                } else {
+                    graph_data_int[i] = data.light;
+                }
                 break;
             case 3:
                 graph_data_int[i] = data.sound;
                 break;
             case 4: 
-                graph_data_int[i] = data.presence;
+                if (((data.status >> 4) & 0x01) == 0x01) {
+                    graph_data_int[i] = INT_MIN;
+                } else {
+                    graph_data_int[i] = data.presence;
+                }
                 break;
             default: 
                 return;
@@ -92,20 +109,22 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         }
 
         // Find the largest value, smallest value, and average in the data
-        if (variable < 1) {
+        if (variable < 1 && graph_data_flt[i] != INT_MIN) {
             if (graph_data_flt[i] > largest_flt) {
                 largest_flt = graph_data_flt[i];
             } else if (graph_data_flt[i] < smallest_flt) {
                 smallest_flt = graph_data_flt[i];
             }
             sum += graph_data_flt[i];
-        } else {
+        } else if (graph_data_int[i] != INT_MIN) {
             if (graph_data_int[i] > largest_int) {
                 largest_int = graph_data_int[i];
             } else if (graph_data_int[i] < smallest_int) {
                 smallest_int = graph_data_int[i];
             }
             sum += graph_data_int[i];
+        } else {
+            bad_data_points_cnt += 1;
         }
 
         // Go to previous data point in file
@@ -113,7 +132,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     }
 
     // Calucate average
-    average = sum / NUM_DATA_POINTS;
+    average = sum / (NUM_DATA_POINTS - bad_data_points_cnt);
 
     // Find the change of one pixel in the y direction
     float delta_y_pixel;
@@ -127,18 +146,25 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     int X_start, X_end, Y_start, Y_end;
     for (int i = 0; i < points_cnt - 1; i++) {
         // Calculate x direction
-        X_start = GRAPH_X_OFFSET + (i * GRAPH_X_DELTA);
+        X_start = GRAPH_X_OFFSET + (i * GRAPH_X_DELTA); 
         X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * GRAPH_X_DELTA);
         // Depending on what type the data is, calculate the y direction
         if (variable < 1) {
-            Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
-            Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+            // Don't graph bad sensor data
+            if (graph_data_flt[i] != INT_MIN && graph_data_flt[i+1] != INT_MIN) {
+                Y_start = (int)(((float)(largest_flt - graph_data_flt[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+                Y_end = (int)(((float)(largest_flt - graph_data_flt[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+                // Draw the graph line
+                EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
+            }
         } else {
-            Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
-            Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+            if (graph_data_int[i] != INT_MIN && graph_data_int[i+1] != INT_MIN) {
+                Y_start = (int)(((float)(largest_int - graph_data_int[i]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+                Y_end = (int)(((float)(largest_int - graph_data_int[i + 1]))/delta_y_pixel) + GRAPH_Y_OFFSET;
+                // Draw the graph line
+                EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
+            }
         }
-        // Draw the graph lines
-        EPD_draw_line(X_start, Y_start, X_end, Y_end, image);
     }
 
     // Draw Axes
@@ -180,6 +206,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, FONT12_HEIGHT, image);
                 var_offset = 0;
             }
+
+            // Display Average
+            
             break;
         case 1:
             // Label Y-Axis
@@ -346,7 +375,7 @@ void SD_store_sensor_data(void) {
         .light = read_VEML7700(),
         .sound = read_SPW2430(),
         .presence = read_C4001(),
-        .time = time(NULL)
+        .status = settings >> SETTING_MCP9808_STATUS
     };
 
     // Create or write to file
@@ -743,7 +772,7 @@ void SPI_init(void) {
     ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card);
     if (ret != ESP_OK) {
             // Sleep to retry mounting
-            esp_sleep_enable_timer_wakeup(1); // 60 seconds
+            esp_sleep_enable_timer_wakeup(1); // Wakeup immediately
             esp_deep_sleep_start();
     }
 
@@ -1101,15 +1130,15 @@ void EPD_reset(void) {
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    //esp32_sleep(100 * 1000);
+    esp32_sleep(100 * 1000);
     // Set reset pin low
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
     // Delay 2ms
-    //esp32_sleep(2 * 1000);
+    esp32_sleep(2 * 1000);
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    //esp32_sleep(100 * 1000);
+    esp32_sleep(100 * 1000);
     // Wait for display
     EPD_busy(); 
 }
@@ -1161,7 +1190,8 @@ void EPD_set_cursor(uint16_t X_start, uint16_t Y_start) {
 void EPD_init(void) {
     // Reset the display
     EPD_reset();
-    //EPD_reset();
+
+    //vTaskDelay(500 / portTICK_PERIOD_MS);
 
     // Configure update mode
     EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_1, COMMAND);
