@@ -181,6 +181,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     float flt_value;
     int16_t int_value;
     int var_offset = 0;
+    char average_string[23];
     switch (variable) {
         case 0:
             // Label Y-Axis
@@ -199,6 +200,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, temp_value, sizeof(temp_value) - var_offset, FONT12_HEIGHT, image);
                 var_offset = 0;
             }
+            // Create average string
+            snprintf(average_string, sizeof(average_string), "Average: %.2f C~", average);
+            EPD_draw_string(150, 0, average_string, sizeof(average_string), FONT12_HEIGHT, image);
             break;
         case 1:
             // Label Y-Axis
@@ -218,6 +222,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                     EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, humidity_value, sizeof(humidity_value), FONT12_HEIGHT, image);
                 }
             }
+            // Create average string
+            snprintf(average_string, sizeof(average_string), "Average: %.2f%%~", average);
+            EPD_draw_string(150, 0, average_string, sizeof(average_string), FONT12_HEIGHT, image);
             break;
         case 2:
             // Label Y-axis
@@ -237,6 +244,9 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                     EPD_draw_string(0, (i * GRAPH_Y_HATCH_DELTA) + GRAPH_Y_OFFSET, light_value, sizeof(light_value), FONT12_HEIGHT, image);
                 }
             }
+            // Create average string
+            snprintf(average_string, sizeof(average_string), "Average: %.2f lux~", average);
+            EPD_draw_string(150, 0, average_string, sizeof(average_string), FONT12_HEIGHT, image);
             break;
         case 3:
             // Label Y-axis
@@ -367,7 +377,7 @@ void SD_store_sensor_data(void) {
         .presence = read_C4001(),
         .status = settings >> SETTING_MCP9808_STATUS
     };
-
+    
     // Create or write to file
     char *data_file = FILE_LOCATION;
     SD_write_file(data_file, data);
@@ -459,7 +469,6 @@ void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int 
 
         // Check for end of string
         if (character == '~') {
-            printf("end of string detected with ~\n");
             break;
         }
 
@@ -648,7 +657,16 @@ void deep_sleep(void) {
 }
 
 void GPIO_init(void) {
-    // Configure GPIO pin 1 as the inputs to wake up from deep sleep
+    // Configure GPIO pin 9 as the load switch output
+    gpio_config_t load_switch_io_conf = {
+        .pin_bit_mask = (1 << GPIO_NUM_9),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&load_switch_io_conf);
+
+    // Configure GPIO pin 4 as the inputs to wake up from deep sleep
     gpio_config_t sleep_io_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_4),
         .mode = GPIO_MODE_INPUT,
@@ -665,6 +683,7 @@ void GPIO_init(void) {
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
     gpio_config(&epd_o_conf);
+
     gpio_config_t epd_i_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_19),
         .mode = GPIO_MODE_INPUT_OUTPUT,
@@ -799,7 +818,7 @@ void ADC_init(void) {
     adc_continuous_config_t adc_config = {
         .pattern_num = 1,
         .adc_pattern = &adc_digi_pattern,
-        .sample_freq_hz = 40000, // max = 83333
+        .sample_freq_hz = 20000, // max = 83333
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
     };
@@ -1020,22 +1039,21 @@ int read_VEML7700(void) {
 }
 
 int read_SPW2430(void) {
-    // Start the adc
     ESP_ERROR_CHECK(adc_continuous_start(SPW2430_dev_handle));
 
-    // Declare the buffer to hold converted values
-    uint8_t buf[100];
+    usleep(5000);
+
+    uint8_t buf[400];
     uint32_t ret_num = 0;
     int max = INT_MIN;
     int min = INT_MAX;
 
-    // Read the ADC
-    ESP_ERROR_CHECK(adc_continuous_read(SPW2430_dev_handle, buf, 100, &ret_num, -1));
+    // Read the actual data
+    ESP_ERROR_CHECK(adc_continuous_read(SPW2430_dev_handle, buf, 400, &ret_num, -1));
 
     int data;
-    for (int i = 0; i < 25; i++) {
-        data = (buf[1 + (i*4)] << 8) | buf[(i*4)];
-        //printf("adc_output %d: %d\n", i, out);
+    for (int i = 0; i < 100; i++) {
+        data = ((buf[i*4 + 1] & 0x0F) << 8) | buf[i*4];
         if (data > max) {
             max = data;
         }
@@ -1045,9 +1063,7 @@ int read_SPW2430(void) {
     }
 
     int diff = max - min;
-    printf("diff = %d\n", diff);
 
-    // Stop the adc
     ESP_ERROR_CHECK(adc_continuous_stop(SPW2430_dev_handle));
 
     return diff;
@@ -1081,15 +1097,15 @@ void EPD_reset(void) {
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    esp32_sleep(100 * 1000);
+    usleep(100 * 1000);
     // Set reset pin low
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
     // Delay 2ms
-    esp32_sleep(2 * 1000);
+    usleep(2 * 1000);
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    esp32_sleep(100 * 1000);
+    usleep(100 * 1000);
     // Wait for display
     EPD_busy(); 
 }
@@ -1108,11 +1124,6 @@ void EPD_deep_sleep(void) {
     EPD_send_byte(EPD_CMD_ENTER_DEEP_SLEEP, COMMAND);
     EPD_send_byte(0x01, DATA);
     printf("EPD_put to sleep\n");
-}
-
-void esp32_sleep(int us) {
-    esp_sleep_enable_timer_wakeup(us);
-    esp_light_sleep_start();
 }
 
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end) {

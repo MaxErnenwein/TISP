@@ -22,6 +22,7 @@
 #include "driver/rtc_io.h"
 #include <sys/time.h>
 #include "esp_adc/adc_continuous.h"
+#include <unistd.h>
 
 // Defines
 #define GPIO_PIN_RESET  0
@@ -159,7 +160,6 @@ void EPD_reset(void);
 void EPD_turn_on_display(void);
 void EPD_display_image(unsigned char* image);
 void EPD_clear(void);
-void esp32_sleep(int us);
 void EPD_deep_sleep(void);
 void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end);
 void EPD_set_cursor(uint16_t X_start, uint16_t Y_start);
