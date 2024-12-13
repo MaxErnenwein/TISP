@@ -30,14 +30,14 @@ void app_main(void)
     deep_sleep();
 }
 
-void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image) {
+int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image) {
     // Open the data in SD card
     FILE* file = fopen(file_path, "rb");
 
     // Check for file open error
     if (file == NULL) {
         printf("File failed to open\n");
-        return;
+        return 1;
     }
 
     // Declare vairables
@@ -53,7 +53,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
     double sum = 0;
     float average;
     int bad_data_points_cnt = 0;
-
+    int ret;
 
     // Go to last data measurement
     fseek(file, -1 * (sizeof(struct sensor_readings)), SEEK_END);
@@ -104,7 +104,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
                 }
                 break;
             default: 
-                return;
+                return 0;
                 break;
         }
 
@@ -128,7 +128,11 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
         }
 
         // Go to previous data point in file
-        fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
+        ret = fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
+        if (ret != 0) {
+            return 1;
+            printf("Seek failure\n");
+        }
     }
 
     // Calucate average
@@ -259,7 +263,7 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
             EPD_draw_string(0, 0, presence_string, sizeof(presence_string), FONT12_HEIGHT, image);
             break;
         default:
-            return;
+            return 0;
             break;
     }
     
@@ -300,21 +304,25 @@ void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char
 
     // Display the graph
     EPD_display_image(image);
+
+    return 0;
 }
 
 void SD_write_file(char* file_path, struct sensor_readings data) {
     FILE* file;
     int i;
+    int ret;
     for (i = 0; i < 10; i++) {
         file = fopen(file_path, "ab");
 
         // Check for file open error
         if (file == NULL) {
             printf("File failed to open %d in SD_write_file\n", i);
+            settings |= (1 << SETTING_SD_STATUS);
         } else {
             break;
         }
-    } 
+    }
 
     if (i == 10) {
         return;
@@ -326,10 +334,14 @@ void SD_write_file(char* file_path, struct sensor_readings data) {
     // Check if data was written
     if (written != 1) {
         printf("Error writing to file in SD_write_file");
+        settings |= (1 << SETTING_SD_STATUS);
     }
 
     // Close the file
-    fclose(file);
+    ret = fclose(file);
+    if (ret != 0) {
+        printf("Failed to close file\n");
+    }
 }
 
 struct sensor_readings SD_read_file(char* file_path, int index) {
@@ -533,6 +545,10 @@ void initial_startup(void) {
 
     // Configure peripherals
     GPIO_init();
+
+    // Toggle load switchon
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
+
     I2C_init();
     SPI_init();
     ADC_init();
@@ -563,18 +579,20 @@ void GPIO_wakeup_startup(void) {
 
     // Configure peripherals
     GPIO_init();
+
+    // Toggle load switch on
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
+
     I2C_init();
     SPI_init();
     ADC_init();
-
-    // Store current sensor data
-    SD_store_sensor_data();
 
     // Initialize the EPD
     EPD_init();
 
     int graph_state = (settings >> SETTING_GRAPH_STATE_0) & 0xF;
     char *data_file = FILE_LOCATION;
+    int ret = 0;
 
     switch(graph_state) {
         // Draw current sensor data on first push
@@ -582,22 +600,29 @@ void GPIO_wakeup_startup(void) {
             EPD_draw_sensor_data(current_data_image);
             break;
         case 1: 
-            EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, blank_image);
             break;
         case 2: 
-            EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, blank_image);
             break;
         case 3: 
-            EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, blank_image);
             break;
         case 4:
-            EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, blank_image);
             break;
         case 5:
-            EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, blank_image);
             break;
         default:
             break;
+    }
+
+    if (ret != 0) {
+        EPD_deep_sleep();
+        settings |= (1 << SETTING_SD_STATUS);
+        esp_sleep_enable_timer_wakeup(1); // Wakeup immediately
+        esp_deep_sleep_start();
     }
 
     // Update to next graph state
@@ -614,8 +639,6 @@ void GPIO_wakeup_startup(void) {
     // Put the EPD to sleep
     EPD_deep_sleep();
 
-    printf("GPIO done\n");
-
     // After successful GPIO runthrough, clear settings bit
     settings &= ~(1 << SETTING_GPIO_WAKE);
 }
@@ -625,6 +648,10 @@ void timer_wakeup_startup(void) {
 
     // Configure peripherals
     GPIO_init();
+
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
+    //usleep(1000000);
+
     I2C_init();
     SPI_init();
     ADC_init();
@@ -651,6 +678,8 @@ void deep_sleep(void) {
     esp_sleep_enable_timer_wakeup(sleep_time);
 
     printf("Entering Deep Sleep\n");
+
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) & ~(1 << 19));
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -686,7 +715,7 @@ void GPIO_init(void) {
 
     gpio_config_t epd_i_conf = {
         .pin_bit_mask = (1 << GPIO_NUM_19),
-        .mode = GPIO_MODE_INPUT_OUTPUT,
+        .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
@@ -740,6 +769,18 @@ void I2C_init(void) {
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &AHT20_cfg, &AHT20_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &VEML7700_cfg, &VEML7700_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &C4001_cfg, &C4001_dev_handle));
+
+    // TEST
+    uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
+    uint8_t data[7];
+    ESP_ERROR_CHECK(i2c_master_transmit(AHT20_dev_handle, command, sizeof(command), -1));
+
+    uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
+    uint8_t command_2[1] = {VEML7700_MEASURE_LIGHT};
+    uint8_t data_2[2];
+    int lux;
+    ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command_2, sizeof(command_2), data_2, sizeof(data_2), -1));
 }
 
 void SPI_init(void) {
@@ -788,6 +829,7 @@ void SPI_init(void) {
     ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card);
     if (ret != ESP_OK) {
             // Sleep to retry mounting
+            settings |= (1 << SETTING_SD_STATUS);
             esp_sleep_enable_timer_wakeup(1); // Wakeup immediately
             esp_deep_sleep_start();
     }
@@ -1107,7 +1149,8 @@ void EPD_reset(void) {
     // Delay 100ms
     usleep(100 * 1000);
     // Wait for display
-    EPD_busy(); 
+    //EPD_busy(); 
+
 }
 
 void EPD_turn_on_display(void) {
@@ -1116,7 +1159,8 @@ void EPD_turn_on_display(void) {
 	EPD_send_byte(0xF7, DATA);
     // Update display
     EPD_send_byte(EPD_CMD_UPDATE_DISPLAY, COMMAND);
-    EPD_busy();
+    //EPD_busy();
+    usleep(10000);
 }
 
 void EPD_deep_sleep(void) {
@@ -1169,7 +1213,8 @@ void EPD_init(void) {
     // Set the cursor at the origin (Top Left)
     EPD_set_cursor(0, 0);
 
-    EPD_busy();
+    //EPD_busy();
+    usleep(10000);
 }
 
 void EPD_clear(void) {

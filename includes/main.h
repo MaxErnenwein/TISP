@@ -24,6 +24,10 @@
 #include "esp_adc/adc_continuous.h"
 #include <unistd.h>
 
+#include "esp_rom_gpio.h"
+#include "soc/gpio_reg.h"
+#include "soc/gpio_sig_map.h"
+
 // Defines
 #define GPIO_PIN_RESET  0
 #define GPIO_PIN_SET    1
@@ -123,6 +127,7 @@
 #define SETTING_VEML7700_STATUS 8
 #define SETTING_C4001_STATUS    9
 #define SETTING_SPW2430_STATUS  10
+#define SETTING_SD_STATUS       11
 
 // Declare sensor readings struct
 struct sensor_readings {
@@ -167,7 +172,7 @@ void EPD_draw_pixel(uint16_t x, uint16_t y, unsigned char* image);
 void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_size, unsigned char* image);
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image);
-void EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image);
+int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image);
 void EPD_draw_sensor_data(unsigned char* image);
 void EPD_clear_image(unsigned char* image);
 void SD_write_file(char* file_path, struct sensor_readings data);
@@ -180,15 +185,18 @@ int read_SPW2430(void);
 int read_C4001(void);
 
 // RTC variable
-RTC_DATA_ATTR int wake_count = 0;
+RTC_DATA_ATTR int fail_count = 0;
 RTC_DATA_ATTR uint32_t settings = 0;
 
 // RTC function declerations
 void RTC_IRAM_ATTR esp_wake_deep_sleep(void) {
     esp_default_wake_deep_sleep();
-    static RTC_RODATA_ATTR const char fmt_str[] = "Wake From Deep Sleep: %d\n";
-    wake_count++;
-    esp_rom_printf(fmt_str, wake_count);
+    if (((settings >> SETTING_SD_STATUS) & 0x01) == 1) {
+        fail_count++;
+        settings &= ~(1 << SETTING_SD_STATUS);
+    }
+    static RTC_RODATA_ATTR const char fmt_str[] = "SD Card Failures: %d\n";
+    esp_rom_printf(fmt_str, fail_count);
 }
 
 #endif  // __MAIN_H__
