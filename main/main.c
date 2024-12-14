@@ -563,8 +563,8 @@ void initial_startup(void) {
         ESP_ERROR_CHECK(i2c_master_transmit(C4001_dev_handle, eChangeMode, sizeof(eChangeMode), -1));
         ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &readStatus, sizeof(readStatus), &data, sizeof(data), -1));
         vTaskDelay(500 / portTICK_PERIOD_MS);
-    } while ((data & 0x02) >> 1 == 1);
-
+    } while (data != 0x81);
+    
     // Display startup image
     EPD_init();
     EPD_display_image(test_image);
@@ -596,7 +596,8 @@ void GPIO_wakeup_startup(void) {
 
     switch(graph_state) {
         // Draw current sensor data on first push
-        case 0: 
+        case 0:
+            usleep(300000);
             EPD_draw_sensor_data(current_data_image);
             break;
         case 1: 
@@ -650,13 +651,13 @@ void timer_wakeup_startup(void) {
     GPIO_init();
 
     REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
-    //usleep(1000000);
 
     I2C_init();
     SPI_init();
     ADC_init();
 
     // Store current sensor data
+    usleep(300000);
     SD_store_sensor_data();
 }
 
@@ -770,17 +771,12 @@ void I2C_init(void) {
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &VEML7700_cfg, &VEML7700_dev_handle));
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &C4001_cfg, &C4001_dev_handle));
 
-    // TEST
-    uint8_t command[3] = {AHT20_MEADURE_HUMIDITY, AHT20_MEADURE_HUMIDITY_P1, AHT20_MEADURE_HUMIDITY_P2};
-    uint8_t data[7];
+    // Initialize Sensors
+    uint8_t command[1] = {AHT20_MEADURE_HUMIDITY};
     ESP_ERROR_CHECK(i2c_master_transmit(AHT20_dev_handle, command, sizeof(command), -1));
 
     uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
-    uint8_t command_2[1] = {VEML7700_MEASURE_LIGHT};
-    uint8_t data_2[2];
-    int lux;
     ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command_2, sizeof(command_2), data_2, sizeof(data_2), -1));
 }
 
 void SPI_init(void) {
@@ -1044,13 +1040,13 @@ int read_AHT20(void) {
 
 int read_VEML7700(void) {
     // Variable declaration
-    uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
+    //uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
     uint8_t command[1] = {VEML7700_MEASURE_LIGHT};
     uint8_t data[2];
     int lux;
 
     // Set VEML7700 to gain of 1 and integration time of 100ms
-    ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
+    //ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
 
     // Read light level
     ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1));
@@ -1116,7 +1112,16 @@ int read_C4001(void) {
     int presence = 0;
     uint8_t command = 0x10;
 
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &command, sizeof(command), &data, sizeof(data), -1));
+    // Measure presence
+    for(int i = 0; i < 10; i++) {
+        ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &command, sizeof(command), &data, sizeof(data), -1));
+        if (data == 1) {
+            presence = 1;
+            printf("Presnece detected\n");
+        }
+        // Short delay between measurements
+        usleep(10000);
+    }
 
     if (data > 1) {
         settings |= (1 << SETTING_C4001_STATUS);
@@ -1124,8 +1129,6 @@ int read_C4001(void) {
     } else {
         settings &= ~(1 << SETTING_C4001_STATUS);
     }
-
-    presence = data;
 
     return presence;
 }
