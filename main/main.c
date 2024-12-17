@@ -5,6 +5,10 @@
 
 void app_main(void)
 {
+    struct timeval start;
+    struct timeval end;
+    gettimeofday(&start, NULL);
+
     // Get reason for esp32 reset
     esp_reset_reason_t reset_reason = esp_reset_reason();
 
@@ -27,6 +31,12 @@ void app_main(void)
         }
     }
 
+    gettimeofday(&end, NULL);
+    // Calculate time
+    int64_t timer = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+    printf("Timer: %lldus\n", timer);
+
+    // Go into deep sleep
     deep_sleep();
 }
 
@@ -128,7 +138,7 @@ int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char*
         }
 
         // Go to previous data point in file
-        ret = fseek(file, -2 * (delta_time * sizeof(struct sensor_readings)), SEEK_CUR);
+        ret = fseek(file, -1 * (sizeof(struct sensor_readings) + (delta_time * sizeof(struct sensor_readings))), SEEK_CUR);
         if (ret != 0) {
             return 1;
             printf("Seek failure\n");
@@ -150,8 +160,11 @@ int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char*
     int X_start, X_end, Y_start, Y_end;
     for (int i = 0; i < points_cnt - 1; i++) {
         // Calculate x direction
-        X_start = GRAPH_X_OFFSET + (i * GRAPH_X_DELTA); 
-        X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * GRAPH_X_DELTA);
+        //X_start = GRAPH_X_OFFSET + (i * GRAPH_X_DELTA); 
+        //X_end = GRAPH_X_OFFSET + GRAPH_X_DELTA + (i * GRAPH_X_DELTA);
+        // New graph direction to make Sheaff happy
+        X_start = GRAPH_X_LIMIT - (i * GRAPH_X_DELTA);
+        X_end = GRAPH_X_LIMIT - (GRAPH_X_DELTA + (i * GRAPH_X_DELTA));
         // Depending on what type the data is, calculate the y direction
         if (variable < 1) {
             // Don't graph bad sensor data
@@ -294,7 +307,7 @@ int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char*
         if (time_value >= 0 && time_value <= 60) {
             // Draw label for hatch mark
             snprintf(time_string, sizeof(time_string) - var_offset, "%.1f%c", time_value, time_unit);
-            EPD_draw_string((i * GRAPH_X_HATCH_DELTA) + GRAPH_X_OFFSET - 8, 290, time_string, sizeof(time_string) - var_offset, FONT12_HEIGHT, image);
+            EPD_draw_string(GRAPH_X_LIMIT - (((i + 1) * GRAPH_X_HATCH_DELTA)), 290, time_string, sizeof(time_string) - var_offset, FONT12_HEIGHT, image);
         }
         var_offset = 0;
     }
@@ -310,22 +323,14 @@ int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char*
 
 void SD_write_file(char* file_path, struct sensor_readings data) {
     FILE* file;
-    int i;
     int ret;
-    for (i = 0; i < 10; i++) {
-        file = fopen(file_path, "ab");
 
-        // Check for file open error
-        if (file == NULL) {
-            printf("File failed to open %d in SD_write_file\n", i);
-            settings |= (1 << SETTING_SD_STATUS);
-        } else {
-            break;
-        }
-    }
+    // Open the data file
+    file = fopen(file_path, "ab");
 
-    if (i == 10) {
-        return;
+    // Check for file open error
+    if (file == NULL) {
+        settings |= (1 << SETTING_SD_STATUS);
     }
 
     // Write data to SD card
@@ -379,13 +384,13 @@ struct sensor_readings SD_read_file(char* file_path, int index) {
     return data;
 }
 
-void SD_store_sensor_data(void) {
+void SD_store_sensor_data(int sound) {
     // Get sensor values
     struct sensor_readings data = {
         .temperature = read_MCP9808(),
         .humidity = read_AHT20(),
         .light = read_VEML7700(),
-        .sound = read_SPW2430(),
+        .sound = sound,
         .presence = read_C4001(),
         .status = settings >> SETTING_MCP9808_STATUS
     };
@@ -547,23 +552,23 @@ void initial_startup(void) {
     GPIO_init();
 
     // Toggle load switchon
-    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << LOAD_SWITCH_PIN));
 
     I2C_init();
     SPI_init();
     ADC_init();
 
     // Commands and data
-    uint8_t eChangeMode[2] = {0x02, 0x3B};
-    uint8_t readStatus = 0x00;
-    uint8_t data;
+    uint8_t eChangeMode[2] = {C4001_REG_CTRL1, C4001_CHANGE_MODE};
+    uint8_t readStatus = C4001_GET_SENSOR_MODE;
+    uint8_t mode;
 
-    // Put the presence sensor in the correct mode
+    // Put the presence sensor in the correct sensing mode
     do {
         ESP_ERROR_CHECK(i2c_master_transmit(C4001_dev_handle, eChangeMode, sizeof(eChangeMode), -1));
-        ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &readStatus, sizeof(readStatus), &data, sizeof(data), -1));
+        ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &readStatus, sizeof(readStatus), &mode, sizeof(mode), -1));
         vTaskDelay(500 / portTICK_PERIOD_MS);
-    } while (data != 0x81);
+    } while (mode != C4001_SENSE_MODE);
     
     // Display startup image
     EPD_init();
@@ -579,14 +584,9 @@ void GPIO_wakeup_startup(void) {
 
     // Configure peripherals
     GPIO_init();
-
-    // Toggle load switch on
-    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
-
     I2C_init();
     SPI_init();
-    ADC_init();
-
+    
     // Initialize the EPD
     EPD_init();
 
@@ -597,22 +597,36 @@ void GPIO_wakeup_startup(void) {
     switch(graph_state) {
         // Draw current sensor data on first push
         case 0:
-            usleep(300000);
-            EPD_draw_sensor_data(current_data_image);
+            ADC_init();
+            // Read sound from SPW2430
+            int sound;
+            sound = read_SPW2430();
+
+            // Toggle load switch on
+            REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << LOAD_SWITCH_PIN));
+
+            usleep(300000); // Sleep to allow presence sensor time to wakeup
+            EPD_draw_sensor_data(current_data_image, sound);
             break;
         case 1: 
             ret = EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_MINUTES, data_file, blank_image);
             break;
         case 2: 
-            ret = EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, blank_image);
+            ret = EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_10_MINUTES, data_file, blank_image);
             break;
         case 3: 
+            ret = EPD_draw_graph(GRAPH_TEMPERATURE, DELTA_1_HOURS, data_file, blank_image);
+            break;
+        case 4: 
+            ret = EPD_draw_graph(GRAPH_HUMIDITY, DELTA_1_MINUTES, data_file, blank_image);
+            break;
+        case 5: 
             ret = EPD_draw_graph(GRAPH_LIGHT, DELTA_1_MINUTES, data_file, blank_image);
             break;
-        case 4:
+        case 6:
             ret = EPD_draw_graph(GRAPH_SOUND, DELTA_1_MINUTES, data_file, blank_image);
             break;
-        case 5:
+        case 7:
             ret = EPD_draw_graph(GRAPH_PRESENCE, DELTA_1_MINUTES, data_file, blank_image);
             break;
         default:
@@ -627,7 +641,7 @@ void GPIO_wakeup_startup(void) {
     }
 
     // Update to next graph state
-    if (graph_state < 5) {
+    if (graph_state < 7) {
         // Clear graph state bits
         settings &= ~(0xF << SETTING_GRAPH_STATE_0);
         // Add 1 to the graph state
@@ -642,28 +656,36 @@ void GPIO_wakeup_startup(void) {
 
     // After successful GPIO runthrough, clear settings bit
     settings &= ~(1 << SETTING_GPIO_WAKE);
+
+    
 }
 
 void timer_wakeup_startup(void) {
     printf("Timer Wakeup\n");
 
+    ADC_init();
+    // Read sound from SPW2430 before other peripheral noise
+    int sound;
+    sound = read_SPW2430();
+
     // Configure peripherals
     GPIO_init();
 
-    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << 19));
+    // Turn on load switch
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) | (1 << LOAD_SWITCH_PIN));
 
     I2C_init();
     SPI_init();
-    ADC_init();
 
     // Store current sensor data
-    usleep(300000);
-    SD_store_sensor_data();
+    usleep(300000); // Sleep to allow presence sensor time to wakeup
+    SD_store_sensor_data(sound);
 }
 
 void deep_sleep(void) {
     // Dismount the SD card
     esp_vfs_fat_sdcard_unmount("/sdcard", card);
+    sdspi_host_deinit();
 
     // Get current time
     struct timeval tv_now;
@@ -672,7 +694,7 @@ void deep_sleep(void) {
     // Calculate time to next minute
     int64_t sleep_time = (60 - tv_now.tv_sec % 60) * 1000000 - tv_now.tv_usec;
 
-    // Set GPIO pin 0 for wakeup
+    // Set GPIO pin 4 for wakeup
     esp_deep_sleep_enable_gpio_wakeup(0x10, ESP_GPIO_WAKEUP_GPIO_HIGH);
 
     // Set sleep duration
@@ -680,25 +702,16 @@ void deep_sleep(void) {
 
     printf("Entering Deep Sleep\n");
 
-    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) & ~(1 << 19));
+    REG_WRITE(GPIO_OUT_REG, REG_READ(GPIO_OUT_REG) & ~(1 << LOAD_SWITCH_PIN));
 
     // Enter deep sleep
     esp_deep_sleep_start();
 }
 
 void GPIO_init(void) {
-    // Configure GPIO pin 9 as the load switch output
-    gpio_config_t load_switch_io_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_9),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-    };
-    gpio_config(&load_switch_io_conf);
-
     // Configure GPIO pin 4 as the inputs to wake up from deep sleep
     gpio_config_t sleep_io_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_4),
+        .pin_bit_mask = (1 << GPIO_WAKEUP_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -707,20 +720,21 @@ void GPIO_init(void) {
 
     // EPD pins
     gpio_config_t epd_o_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_5) | (1 << GPIO_NUM_6) | (1 << GPIO_NUM_10) | (1 << GPIO_NUM_20),
+        .pin_bit_mask = (1 << EPD_DC_PIN) | (1 << EPD_SCK_PIN) | (1 << EPD_CS_PIN) | (1 << EPD_RST_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
     gpio_config(&epd_o_conf);
 
-    gpio_config_t epd_i_conf = {
-        .pin_bit_mask = (1 << GPIO_NUM_19),
+    // Configure GPIO19 as the load switch output
+    gpio_config_t load_switch_conf = {
+        .pin_bit_mask = (1 << LOAD_SWITCH_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
-    gpio_config(&epd_i_conf);
+    gpio_config(&load_switch_conf);
 }
 
 void I2C_init(void) {
@@ -759,6 +773,7 @@ void I2C_init(void) {
         .scl_speed_hz = 100000,
     };
 
+    // C4001 device configuration
     i2c_device_config_t C4001_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = C4001_SENSOR_ADDR,
@@ -807,6 +822,7 @@ void SPI_init(void) {
         .clock_speed_hz = 10000000,
         .spics_io_num = SPI_EPD_CS_IO,
         .queue_size = 7,
+        .mode = 3
     };
 
     // Initialize the SPI bus
@@ -829,9 +845,6 @@ void SPI_init(void) {
             esp_sleep_enable_timer_wakeup(1); // Wakeup immediately
             esp_deep_sleep_start();
     }
-
-    // Print SD card information
-    //sdmmc_card_print_info(stdout, card);
 }
 
 void ADC_init(void) {
@@ -864,7 +877,7 @@ void ADC_init(void) {
     ESP_ERROR_CHECK(adc_continuous_config(SPW2430_dev_handle, &adc_config));
 }
 
-void EPD_draw_sensor_data(unsigned char* image) {
+void EPD_draw_sensor_data(unsigned char* image, int sound) {
     // Read temp from MCP9808
     float temp;
     temp = read_MCP9808();
@@ -877,9 +890,9 @@ void EPD_draw_sensor_data(unsigned char* image) {
     int lux;
     lux = read_VEML7700();
 
-    // Read sound from KY038
-    int sound;
-    sound = read_SPW2430();
+    // Read sound from SPW2430
+    //int sound;
+    //sound = read_SPW2430();
 
     // Read presence from C4001
     int presence;
@@ -1040,13 +1053,9 @@ int read_AHT20(void) {
 
 int read_VEML7700(void) {
     // Variable declaration
-    //uint8_t config_command[3] = {VEML7700_CONFIG, VEML7700_CONFIG_P1, VEML7700_CONFIG_P2};
     uint8_t command[1] = {VEML7700_MEASURE_LIGHT};
     uint8_t data[2];
     int lux;
-
-    // Set VEML7700 to gain of 1 and integration time of 100ms
-    //ESP_ERROR_CHECK(i2c_master_transmit(VEML7700_dev_handle, config_command, sizeof(config_command), -1));
 
     // Read light level
     ESP_ERROR_CHECK(i2c_master_transmit_receive(VEML7700_dev_handle, command, sizeof(command), data, sizeof(data), -1));
@@ -1110,14 +1119,13 @@ int read_SPW2430(void) {
 int read_C4001(void) {
     uint8_t data;
     int presence = 0;
-    uint8_t command = 0x10;
+    uint8_t command = C4001_GET_PRESENCE;
 
     // Measure presence
     for(int i = 0; i < 10; i++) {
         ESP_ERROR_CHECK(i2c_master_transmit_receive(C4001_dev_handle, &command, sizeof(command), &data, sizeof(data), -1));
         if (data == 1) {
             presence = 1;
-            printf("Presnece detected\n");
         }
         // Short delay between measurements
         usleep(10000);
@@ -1133,27 +1141,19 @@ int read_C4001(void) {
     return presence;
 }
 
-void EPD_busy(void) {
-    // Wait until the EPD is not busy
-    while(gpio_get_level(EPD_BUSY_PIN) == 1);
-}
-
 void EPD_reset(void) {
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    usleep(100 * 1000);
+    usleep(100000);
     // Set reset pin low
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_RESET);
     // Delay 2ms
-    usleep(2 * 1000);
+    usleep(2000);
     // Set reset pin high
     gpio_set_level(EPD_RST_PIN, GPIO_PIN_SET);
     // Delay 100ms
-    usleep(100 * 1000);
-    // Wait for display
-    //EPD_busy(); 
-
+    usleep(100000);
 }
 
 void EPD_turn_on_display(void) {
@@ -1162,7 +1162,7 @@ void EPD_turn_on_display(void) {
 	EPD_send_byte(0xF7, DATA);
     // Update display
     EPD_send_byte(EPD_CMD_UPDATE_DISPLAY, COMMAND);
-    //EPD_busy();
+    // Short delay
     usleep(10000);
 }
 
@@ -1188,10 +1188,10 @@ void EPD_set_windows(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_
 }
 
 void EPD_set_cursor(uint16_t X_start, uint16_t Y_start) {
-    EPD_send_byte(0x4E, COMMAND); // SET_RAM_X_ADDRESS_COUNTER
+    EPD_send_byte(EPD_CMD_SET_RAM_X_ADDRESS_COUNTER, COMMAND); // SET_RAM_X_ADDRESS_COUNTER
     EPD_send_byte(X_start & 0xFF, DATA);
 
-    EPD_send_byte(0x4F, COMMAND); // SET_RAM_Y_ADDRESS_COUNTER
+    EPD_send_byte(EPD_CMD_SET_RAM_Y_ADDRESS_COUNTER, COMMAND); // SET_RAM_Y_ADDRESS_COUNTER
     EPD_send_byte(Y_start & 0xFF, DATA);
     EPD_send_byte((Y_start >> 8) & 0xFF, DATA);
 }
@@ -1199,8 +1199,6 @@ void EPD_set_cursor(uint16_t X_start, uint16_t Y_start) {
 void EPD_init(void) {
     // Reset the display
     EPD_reset();
-
-    //vTaskDelay(500 / portTICK_PERIOD_MS);
 
     // Configure update mode
     EPD_send_byte(EPD_CMD_CONF_UPDATE_MODE_1, COMMAND);
@@ -1216,7 +1214,6 @@ void EPD_init(void) {
     // Set the cursor at the origin (Top Left)
     EPD_set_cursor(0, 0);
 
-    //EPD_busy();
     usleep(10000);
 }
 
@@ -1254,7 +1251,6 @@ void EPD_display_image(unsigned char* image) {
 
     // Write to screen in BW
     EPD_send_byte(EPD_CMD_WRITE_BW, COMMAND);
-    // Set each pixel to 1 (black)
     for (int i = 0; i < Height*Width; i++) {
         EPD_send_byte(image[i], DATA);
     }

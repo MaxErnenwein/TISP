@@ -23,7 +23,6 @@
 #include <sys/time.h>
 #include "esp_adc/adc_continuous.h"
 #include <unistd.h>
-
 #include "esp_rom_gpio.h"
 #include "soc/gpio_reg.h"
 #include "soc/gpio_sig_map.h"
@@ -32,9 +31,11 @@
 #define GPIO_PIN_RESET  0
 #define GPIO_PIN_SET    1
 
+// E-Paper DC bit
 #define COMMAND         0
 #define DATA            1
 
+// Font Sizes
 #define FONT8_HEIGHT    8
 #define FONT8_WIDTH     5
 #define FONT12_HEIGHT   12
@@ -42,10 +43,12 @@
 #define FONT24_HEIGHT   24
 #define FONT24_WIDTH    17
 
+// I2C GPIO pins
 #define TEST_I2C_PORT       0
 #define I2C_MASTER_SCL_IO   3
 #define I2C_MASTER_SDA_IO   1
 
+// SPI GPIO pins
 #define SPI_MOSI_IO     7
 #define SPI_MISO_IO     2
 #define SPI_SCLK_IO     6
@@ -54,15 +57,25 @@
 #define SPI_QUADWP_IO   -1
 #define SPI_QUADHD_IO   -1
 
+//EPD GPIO pins
 #define EPD_RST_PIN         20
-#define EPD_BUSY_PIN        19
+//#define EPD_BUSY_PIN        19
 #define EPD_DC_PIN          5
 #define EPD_CS_PIN          10
 #define EPD_MOSI_PIN        7
 #define EPD_SCK_PIN         6
+
+// Load switch GPIO pin
+#define LOAD_SWITCH_PIN     19
+
+// GPIO Wakeup pin
+#define GPIO_WAKEUP_PIN     4
+
+// EPD dimensions
 #define EPD_4IN2_V2_WIDTH   400
 #define EPD_4IN2_V2_HEIGHT  300
 
+// EPD commnads
 #define EPD_CMD_WRITE_BW            0x24
 #define EPD_CMD_CONF_UPDATE_MODE_2  0x22
 #define EPD_CMD_CONF_UPDATE_MODE_1  0x21
@@ -71,13 +84,17 @@
 #define EPD_CMD_SET_DATA_ENTRY_MODE 0x11
 #define EPD_CMD_SET_RAM_X_ADDRESS   0x44
 #define EPD_CMD_SET_RAM_Y_ADDRESS   0x45
+#define EPD_CMD_SET_RAM_X_ADDRESS_COUNTER   0x4E
+#define EPD_CMD_SET_RAM_Y_ADDRESS_COUNTER   0x4F
 
+// Sensor addresses
 #define MCP9808_SENSOR_ADDR         0x18
 #define MCP9808_SENSOR_ADDR_2       0x1C
 #define AHT20_SENSOR_ADDR           0x38
 #define VEML7700_SENSOR_ADDR        0x10
 #define C4001_SENSOR_ADDR           0x2A
 
+// Sensor commands
 #define MCP9808_MEASURE_TEMPERATURE 0x05
 #define AHT20_MEADURE_HUMIDITY      0xAC
 #define AHT20_MEADURE_HUMIDITY_P1   0x33
@@ -86,7 +103,13 @@
 #define VEML7700_CONFIG             0x00
 #define VEML7700_CONFIG_P1          0x00
 #define VEML7700_CONFIG_P2          0x00
+#define C4001_REG_CTRL1             0x02
+#define C4001_CHANGE_MODE           0x3B
+#define C4001_GET_SENSOR_MODE       0x00
+#define C4001_SENSE_MODE            0x81
+#define C4001_GET_PRESENCE          0x10
 
+// Time deltas for graphs
 #define DELTA_1_MINUTES     1
 #define DELTA_2_MINUTES     2
 #define DELTA_5_MINUTES     5
@@ -97,6 +120,8 @@
 #define DELTA_2_HOURS       120
 #define DELTA_5_HOURS       300
 #define DELTA_10_HOURS      600
+
+// Graph Formatting
 #define NUM_DATA_POINTS     74
 #define GRAPH_X_OFFSET      35
 #define GRAPH_X_DELTA       5
@@ -108,15 +133,19 @@
 #define GRAPH_Y_LIMIT       280
 #define GRAPH_Y_HATCH_DELTA 27
 #define GRAPH_Y_NUM_HATCH   11
+
+// Graph variable
 #define GRAPH_TEMPERATURE   0
 #define GRAPH_HUMIDITY      1
 #define GRAPH_LIGHT         2
 #define GRAPH_SOUND         3
 #define GRAPH_PRESENCE      4
 
+// Data file name
 #define FILE_LOCATION "/sdcard/TISPdata.bin"
 
-#define SETTING_TEMP_C_OR_F     0
+// Setting bits
+//#define SETTING_TEMP_C_OR_F     0
 #define SETTING_GPIO_WAKE       1
 #define SETTING_GRAPH_STATE_0   2
 #define SETTING_GRAPH_STATE_1   3
@@ -173,9 +202,10 @@ void EPD_draw_char(uint16_t x, uint16_t y, int font_character_index, int font_si
 void EPD_draw_string(uint16_t x, uint16_t y, char* string, int string_size, int font_size, unsigned char* image);
 void EPD_draw_line(uint16_t X_start, uint16_t Y_start, uint16_t X_end, uint16_t Y_end, unsigned char* image);
 int EPD_draw_graph(int variable, int delta_time, char* file_path, unsigned char* image);
-void EPD_draw_sensor_data(unsigned char* image);
+void EPD_draw_sensor_data(unsigned char* image, int sound);
 void EPD_clear_image(unsigned char* image);
 void SD_write_file(char* file_path, struct sensor_readings data);
+void SD_store_sensor_data(int sound);
 struct sensor_readings SD_read_file(char* file_path, int index);
 float read_MCP9808(void);
 float read_MCP9808_2(void);
