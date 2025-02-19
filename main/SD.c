@@ -1,5 +1,6 @@
 #include "../includes/SD.h"
 #include "../includes/main.h"
+#include "../includes/Sensors.h"
 
 sdmmc_card_t *card;
 extern RTC_DATA_ATTR uint32_t settings;

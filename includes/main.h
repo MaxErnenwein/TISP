@@ -28,13 +28,6 @@
 #include "soc/gpio_sig_map.h"
 
 // Defines
-#define GPIO_PIN_RESET  0
-#define GPIO_PIN_SET    1
-
-// E-Paper DC bit
-#define COMMAND         0
-#define DATA            1
-
 // I2C GPIO pins
 #define TEST_I2C_PORT       0
 #define I2C_MASTER_SCL_IO   3
@@ -140,10 +133,5 @@ void I2C_init(void);
 void SPI_init(void);
 void ADC_init(void);
 void deep_sleep(void);
-float read_MCP9808(void);
-int read_AHT20(void);
-int read_VEML7700(void);
-int read_SPW2430(void);
-int read_C4001(void);
 
 #endif  // MAIN_H

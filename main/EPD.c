@@ -1,6 +1,7 @@
 #include "../includes/EPD.h"
 #include "../includes/fonts.h"
 #include "../includes/main.h"
+#include "../includes/Sensors.h"
 
 spi_device_handle_t EPD_dev_handle;
 extern RTC_DATA_ATTR uint32_t settings;
