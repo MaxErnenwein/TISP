@@ -1,3 +1,6 @@
+#ifndef __FONTS_H__
+#define __FONTS_H__
+
 /**
   ******************************************************************************
   * @file    Font8.c
@@ -41,7 +44,7 @@
 //  Font data for Courier New 12pt
 // 
 
-uint8_t Font8_Table[] = 
+static uint8_t Font8_Table[] = 
 {
 	// @0 ' ' (5 pixels wide)
 	0x00, //      
@@ -994,7 +997,7 @@ uint8_t Font8_Table[] =
 	0x00, //      
 };
 
-uint8_t Font12_Table[] = 
+static uint8_t Font12_Table[] = 
 {
 	// @0 ' ' (7 pixels wide)
 	0x00, //        
@@ -2328,7 +2331,7 @@ uint8_t Font12_Table[] =
 };
 
 
-const uint8_t Font24_Table[] = 
+static uint8_t Font24_Table[] = 
 {
 	// @0 ' ' (17 pixels wide)
 	0x00, 0x00, 0x00, //                  
@@ -4802,3 +4805,4 @@ const uint8_t Font24_Table[] =
 };
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+#endif // __FONTS_H__
