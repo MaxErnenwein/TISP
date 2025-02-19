@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <limits.h>
-
 #include <driver/i2c_master.h>
 #include "esp_sleep.h"
 #include "driver/gpio.h"

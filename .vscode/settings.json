@@ -17,6 +17,7 @@
     "idf.flashType": "UART",
     "files.associations": {
         "main.h": "c",
-        "fonts.h": "c"
+        "fonts.h": "c",
+        "images.h": "c"
     }
 }

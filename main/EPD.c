@@ -3,7 +3,7 @@
 #include "../includes/main.h"
 
 spi_device_handle_t EPD_dev_handle;
-
+extern RTC_DATA_ATTR uint32_t settings;
 
 void EPD_init(void) {
     // Reset the display

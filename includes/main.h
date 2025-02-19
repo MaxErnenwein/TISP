@@ -115,7 +115,7 @@
 #define SETTING_GRAPH_STATE_2   4
 #define SETTING_GRAPH_STATE_3   5
 #define SETTING_MCP9808_STATUS  6
-#define SETTING_ATH20_STATUS    7
+#define SETTING_AHT20_STATUS    7
 #define SETTING_VEML7700_STATUS 8
 #define SETTING_C4001_STATUS    9
 #define SETTING_SPW2430_STATUS  10
@@ -131,48 +131,19 @@ struct sensor_readings {
     uint8_t status;
 };
 
-// Global variables
-static i2c_master_dev_handle_t MCP9808_dev_handle;
-static i2c_master_dev_handle_t AHT20_dev_handle;
-static i2c_master_dev_handle_t VEML7700_dev_handle;
-static i2c_master_dev_handle_t C4001_dev_handle;
-static adc_continuous_handle_t SPW2430_dev_handle;
-
-static sdmmc_card_t *card;
-
 // Function declerations
 void initial_startup(void);
 void timer_wakeup_startup(void);
 void GPIO_wakeup_startup(void);
-void peripherals_init(void);
 void GPIO_init(void);
 void I2C_init(void);
 void SPI_init(void);
 void ADC_init(void);
 void deep_sleep(void);
-void SD_write_file(char* file_path, struct sensor_readings data);
-void SD_store_sensor_data(int sound);
-struct sensor_readings SD_read_file(char* file_path, int index);
 float read_MCP9808(void);
-float read_MCP9808_2(void);
 int read_AHT20(void);
 int read_VEML7700(void);
 int read_SPW2430(void);
 int read_C4001(void);
-
-// RTC variable
-RTC_DATA_ATTR static int fail_count = 0;
-RTC_DATA_ATTR static uint32_t settings = 0;
-
-// RTC function declerations
-/*void RTC_IRAM_ATTR extern esp_wake_deep_sleep(void) {
-    esp_default_wake_deep_sleep();
-    if (((settings >> SETTING_SD_STATUS) & 0x01) == 1) {
-        fail_count++;
-        settings &= ~(1 << SETTING_SD_STATUS);
-    }
-    static RTC_RODATA_ATTR const char fmt_str[] = "SD Card Failures: %d\n";
-    esp_rom_printf(fmt_str, fail_count);
-}*/
 
 #endif  // MAIN_H

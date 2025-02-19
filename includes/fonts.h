@@ -44,7 +44,7 @@
 //  Font data for Courier New 12pt
 // 
 
-static uint8_t Font8_Table[] = 
+uint8_t Font8_Table[] = 
 {
 	// @0 ' ' (5 pixels wide)
 	0x00, //      
@@ -997,7 +997,7 @@ static uint8_t Font8_Table[] =
 	0x00, //      
 };
 
-static uint8_t Font12_Table[] = 
+uint8_t Font12_Table[] = 
 {
 	// @0 ' ' (7 pixels wide)
 	0x00, //        
@@ -2331,7 +2331,7 @@ static uint8_t Font12_Table[] =
 };
 
 
-static uint8_t Font24_Table[] = 
+uint8_t Font24_Table[] = 
 {
 	// @0 ' ' (17 pixels wide)
 	0x00, 0x00, 0x00, //                  
